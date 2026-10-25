@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+var/
+.coverage
+
+# Full local snapshots preserved while separating issue PRs.
+.local-backups/

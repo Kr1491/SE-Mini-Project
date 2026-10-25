@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StudySpace · Access verification</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+<header><div class="brand"><span class="brand-mark">S</span>StudySpace<span class="brand-dot">.</span></div><span class="issue-label">ISSUE #5 · ROLE-BASED ACCESS</span></header>
+<main>
+<p class="eyebrow">THE RIGHT ACCESS FOR EVERY ROLE</p><h1>One workspace.<br>Clear permissions<span>.</span></h1>
+<p class="intro">Verify student, instructor and administrator access before connecting the rest of the platform.</p>
+<p id="demo-notice" class="notice" hidden>Local demo: sample accounts and groups. Credential login and registration are separate features.</p>
+<section id="account-panel" class="panel" hidden><h2>Choose a sample account</h2><p class="muted">This selector is enabled only in explicit local demo mode.</p><div id="accounts" class="accounts"><button data-user="2">Student</button><button data-user="1">Instructor</button><button data-user="3">Administrator</button><button data-user="4">Student without memberships</button></div></section>
+<p id="message" class="message" role="status"></p>
+<section id="access-panel" class="panel" hidden><div class="section-heading"><h2>Current account</h2><span id="role-badge" class="badge"></span></div><p id="account-name"></p><h3>Permissions</h3><ul id="permissions" class="permissions"></ul>
+<h3>Check server authorization</h3><p class="muted">Each button sends a request to the backend. Restricted actions return access denied.</p><div class="checks"><button data-check="instructor">Instructor access</button><button data-check="admin">Administrator access</button><button data-check="quiz-create">Quiz creation permission</button><button data-check="group-1">Access sample group 1</button><button data-check="group-3">Access sample group 3</button><button data-check="manage-1">Manage sample group 1</button></div><p id="check-result" class="result" role="status"></p></section>
+<footer>StudySpace / Sprint 1 <span>Role access foundation</span></footer>
+</main>
+</body>
+</html>
