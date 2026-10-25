@@ -1,4 +1,4 @@
-name: Role access checks
+name: Study workspace checks
 on:
   push:
   pull_request:
@@ -21,6 +21,8 @@ jobs:
       - name: Test role and group permissions
         run: python -m unittest discover -s tests -v
       - name: Test asynchronous browser behavior
-        run: node --test tests/test_frontend.cjs
+        run: node --test tests/*.cjs
       - name: Check browser JavaScript syntax
-        run: node --check static/app.js
+        run: |
+          node --check static/app.js
+          node --check static/dashboard.js

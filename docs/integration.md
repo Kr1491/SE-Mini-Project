@@ -1,8 +1,8 @@
-# Issue #5 — integration contract
+# Study workspace — integration contract
 
 ## Scope
 
-Python 3.11+, SQLite, and HTML/CSS/JavaScript; no package installation. This change supplies reusable sessions, server-side role/group authorization, and a generic permission-verification page. It does not implement the three later Krishna issues (#6 dashboards, #7 folders, #12 material access) or the teammates' modules.
+The #5 foundation supplies reusable sessions and role/group authorization. Issue #6 adds database-backed role-specific dashboards. The separately reviewed #7 folder module is used when present; dashboards, access checks and folders retain their own routes. Authentication, group creation/membership, materials, uploads, quizzes and user-management operations remain their feature owners' work.
 
 ## Shared schema
 
@@ -64,6 +64,22 @@ Errors return `{"error":"message"}`. Common statuses: 400 invalid request, 401 m
 
 - Jiya adds registration/login/logout and group creation in her PRs.
 - Anushree adds membership management, uploads, and upload validation in her PRs.
-- Krishna's next PRs separately add #6, then #7, then #12.
+- Krishna adds #6 dashboards in their own PR; #7 folders and #12 material access remain separately reviewed changes.
 - Every protected feature must call the relevant role/group authorization helpers on the server; hiding buttons alone does not protect an API.
 - Agree schema changes and test the real authenticated journey after merging the modules.
+
+
+## Issue #6 — dashboard contract
+
+The root `/` and `/dashboard` serve the new dashboard shell. The existing access/optional folder workspace is preserved at `/access`; its app.js, style.css and optional folders.js retain their behavior.
+
+- `GET /api/dashboard` returns the current user's role-specific profile, navigation, summaries, scoped groups, available/pending actions and update timestamp.
+- `GET /api/dashboard/{student|instructor|administrator}` and matching `/dashboard/{role}` pages require the authenticated role to match; administrators do not impersonate other role dashboards through those URLs.
+- Query-string roles/user IDs are ignored. User identity, role, active status and demo provenance come from the existing session checks.
+- Student partner counts include active creators/members only within accessible groups. Instructor counts distinguish owned groups from memberships. Workspace-wide counts are returned only to administrators.
+- No password hashes, session tokens or CSRF values are included in dashboard JSON. Profile data belongs to the current account.
+- Navigation/action destinations are defined by the server and restricted by the frontend's allowlist. Unimplemented tools are unavailable, without fake counters or active links.
+
+The dashboard reads existing users/groups/memberships without a schema migration. `build_dashboard(..., features={'folders': ...})` receives server-derived capability information; the folder action is available only when the server has the #7 creation implementation loaded. It opens `/access#folders-panel`, where the existing group picker and authorization apply. The dashboard does not implement or bypass folder management.
+
+Jiya's future authentication UI should navigate to `/dashboard` after verified login/session creation. New group/membership records are reflected on refresh. Other feature owners should enable their tool metadata only after their protected routes exist. Preserve server-side role/group checks in every feature; dashboard visibility alone is not authorization.
