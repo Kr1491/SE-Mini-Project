@@ -7,6 +7,8 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
+import sqlite3
 
 from server import Handler
 from study_platform.db import connect, initialize
@@ -204,6 +206,66 @@ class AccessTests(unittest.TestCase):
             self.assertEqual(self.request('GET', path)[0], 200)
         self.login_sample(3)
         self.assertEqual(self.request('GET', '/var/issue5.db')[0], 404)
+
+    def test_demo_session_is_rejected_in_normal_mode_after_restart(self):
+        self.login_sample(3)
+        self.server = SimpleNamespace(database=self.database, demo=False)
+        self.assertEqual(self.request('GET', '/api/session')[0], 401)
+        self.assertEqual(self.request('GET', '/api/access/admin')[0], 401)
+        with connect(self.database) as db:
+            token, _ = create_session(db, 3)
+        self.cookie = f'{COOKIE_NAME}={token}'
+        self.assertEqual(self.request('GET', '/api/access/admin')[0], 200)
+
+    def test_non_ascii_csrf_token_is_denied_without_server_error(self):
+        self.login_sample(1)
+        self.assertEqual(self.request('POST', '/api/access/check',
+            {'permission': 'quiz.create'}, headers={'X-CSRF-Token': 'é'})[0], 403)
+
+    def test_out_of_range_group_ids_are_bad_requests(self):
+        self.login_sample(1)
+        for group_id in ['9223372036854775808', '9' * 100]:
+            for suffix in ['', '/manage']:
+                status, body, _ = self.request('GET', f'/api/access/groups/{group_id}{suffix}')
+                self.assertEqual(status, 400)
+                self.assertIn('group ID', body['error'])
+        self.assertEqual(self.request('GET', '/api/access/groups/999')[0], 404)
+
+    def test_legacy_session_migration_discards_unclassified_tokens(self):
+        legacy = Path(self.temp.name) / 'legacy.db'
+        with sqlite3.connect(legacy) as db:
+            db.executescript("""
+                CREATE TABLE sessions (
+                    token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL,
+                    csrf_token TEXT NOT NULL, expires_at INTEGER NOT NULL
+                );
+            """)
+            db.execute('INSERT INTO sessions VALUES(?,?,?,?)',
+                       ('unknown-old-token', 1, 'old-csrf', int(time.time()) + 3600))
+        initialize(legacy)
+        with connect(legacy) as db:
+            self.assertIn('is_demo', {row['name'] for row in db.execute('PRAGMA table_info(sessions)')})
+            self.assertEqual(db.execute('SELECT count(*) FROM sessions').fetchone()[0], 0)
+            seed(db)
+            token, _ = create_session(db, 1)
+        initialize(legacy)
+        with connect(legacy) as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM sessions').fetchone()[0], 1)
+
+    def test_sample_token_is_committed_before_response_is_sent(self):
+        original_json = Handler.json
+        observed = []
+        database = self.database
+        def check_before_send(handler, status, data, extra=None):
+            if extra and 'Set-Cookie' in extra:
+                token = extra['Set-Cookie'].split(';')[0].split('=', 1)[1]
+                with connect(database) as db:
+                    observed.append(db.execute('SELECT 1 FROM sessions WHERE token_hash=?',
+                        (hashlib.sha256(token.encode()).hexdigest(),)).fetchone() is not None)
+            return original_json(handler, status, data, extra)
+        with patch.object(Handler, 'json', check_before_send):
+            self.login_sample(1)
+        self.assertEqual(observed, [True])
 
 
 if __name__ == '__main__':

@@ -44,3 +44,19 @@ Manual checklist before treating #5 as Done:
 - [ ] Switching accounts updates permissions correctly; browser console has no application errors.
 - [ ] Review, required CI checks, and merge are complete.
 - [ ] Verify real login/session integration when Jiya's module is available; record any pending integration explicitly.
+
+
+## PR #23 review follow-up — 25 October 2026
+
+Executed in the isolated review-fix copy:
+
+- `python3 -m unittest discover -s tests -v`: **35 passed** (Python 3.14).
+- `/opt/homebrew/bin/python3.12 -m unittest discover -s tests -v`: **35 passed**.
+- `node --test tests/test_frontend.cjs`: **5 passed**, covering delayed initialization, both probe response orderings, account switching with a pending probe, and secondary-text contrast.
+- Python compilation and JavaScript syntax checks pass.
+
+The new backend cases cover fixture conflicts, runtime fixture revalidation, dedicated demo reuse, non-null session keys and migration, private file/directory permissions, rejection of a database symlink, explicit IPv6 rejection, session commit-before-response, demo-mode session isolation, large group IDs, and non-ASCII CSRF tokens.
+
+Measured contrast: `.intro` and footer are **6.14:1** against the page background; `.muted` is **6.56:1** against its white panel. All exceed 4.5:1 for normal text. The frontend tests use the actual stylesheet values and the relative-luminance formula.
+
+CI is configured for Python **3.11 and 3.12** with pinned Actions. Python 3.11 is unavailable locally, so its result is pending the GitHub run. The frontend tests execute the actual script with a controlled DOM/fetch harness; they do not claim a live-browser visual check. Live TCP/browser verification remains pending due to the execution environment's socket-binding restriction.

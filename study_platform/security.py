@@ -19,23 +19,24 @@ class APIError(Exception):
         self.status, self.message = status, message
 
 
-def create_session(db, user_id):
+def create_session(db, user_id, *, demo=False):
     """Call ONLY after successful credential verification in Jiya's login module.
 
     Returns (raw_cookie_token, csrf_token); the database stores only a token hash.
     The caller must commit the database transaction and set an HttpOnly cookie.
+    Only the explicit local sample selector passes demo=True.
     """
     user = db.execute('SELECT id FROM users WHERE id=? AND is_active=1', (user_id,)).fetchone()
     if not user:
         raise APIError(401, 'Account is unavailable.')
     token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
     db.execute('DELETE FROM sessions WHERE expires_at <= ?', (int(time.time()),))
-    db.execute('INSERT INTO sessions VALUES (?, ?, ?, ?)',
-               (hashlib.sha256(token.encode()).hexdigest(), user_id, csrf, int(time.time()) + SESSION_SECONDS))
+    db.execute('INSERT INTO sessions (token_hash,user_id,csrf_token,expires_at,is_demo) VALUES (?, ?, ?, ?, ?)',
+               (hashlib.sha256(token.encode()).hexdigest(), user_id, csrf, int(time.time()) + SESSION_SECONDS, int(demo)))
     return token, csrf
 
 
-def current_session(db, cookie_header):
+def current_session(db, cookie_header, *, allow_demo=False):
     cookies = SimpleCookie()
     try:
         cookies.load(cookie_header or '')
@@ -46,8 +47,9 @@ def current_session(db, cookie_header):
         raise APIError(401, 'Please sign in to continue.')
     row = db.execute('''SELECT u.id, u.name, u.email, u.role, s.csrf_token
         FROM sessions s JOIN users u ON u.id=s.user_id
-        WHERE s.token_hash=? AND s.expires_at>? AND u.is_active=1''',
-        (hashlib.sha256(token.value.encode()).hexdigest(), int(time.time()))).fetchone()
+        WHERE s.token_hash=? AND s.expires_at>? AND u.is_active=1
+        AND (s.is_demo=0 OR ?=1)''',
+        (hashlib.sha256(token.value.encode()).hexdigest(), int(time.time()), int(allow_demo))).fetchone()
     if not row:
         raise APIError(401, 'Your session has expired. Please sign in again.')
     return dict(row)

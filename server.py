@@ -7,10 +7,11 @@ import re
 import secrets
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.cookies import SimpleCookie, CookieError
 from pathlib import Path
 from urllib.parse import urlsplit
 from study_platform.db import connect, initialize
-from study_platform.demo import seed
+from study_platform.demo import seed, validate_demo
 from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_session, current_session, group_access, require_permission
 
 ROOT = Path(__file__).resolve().parent
@@ -85,20 +86,28 @@ class Handler(BaseHTTPRequestHandler):
                 uid=data.get('user_id')
                 if type(uid)!=int or uid not in (1,2,3,4):
                     raise APIError(400,'Choose a sample account.')
-                # Replace the previous sample session when switching accounts.
+                if not db.in_transaction:
+                    db.execute('BEGIN IMMEDIATE')
                 try:
-                    from http.cookies import SimpleCookie
-                    cookie=SimpleCookie(self.headers.get('Cookie',''))
-                    if COOKIE_NAME in cookie:
-                        db.execute('DELETE FROM sessions WHERE token_hash=?',
-                                   (hashlib.sha256(cookie[COOKIE_NAME].value.encode()).hexdigest(),))
-                except Exception:
-                    pass
-                token,csrf=create_session(db,uid)
+                    validate_demo(db)
+                except ValueError as exc:
+                    raise APIError(409, str(exc))
+                # Malformed cookies may be ignored; database errors must surface.
+                cookie = SimpleCookie()
+                try:
+                    cookie.load(self.headers.get('Cookie', ''))
+                except CookieError:
+                    cookie.clear()
+                if COOKIE_NAME in cookie:
+                    db.execute('DELETE FROM sessions WHERE token_hash=?',
+                               (hashlib.sha256(cookie[COOKIE_NAME].value.encode()).hexdigest(),))
+                token,csrf=create_session(db,uid,demo=True)
+                # Persist the token/revocation before sending it to the browser.
+                db.commit()
                 return self.json(200,{'csrf_token':csrf}, {'Set-Cookie':f'{COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800'})
-            user=current_session(db,self.headers.get('Cookie'))
+            user=current_session(db,self.headers.get('Cookie'),allow_demo=self.server.demo)
             if method=='POST':
-                if not secrets.compare_digest(self.headers.get('X-CSRF-Token',''),user['csrf_token']):
+                if not secrets.compare_digest(self.headers.get('X-CSRF-Token','').encode('utf-8'),user['csrf_token'].encode('utf-8')):
                     raise APIError(403,'Invalid request token. Refresh the page and try again.')
             safe_user={k:user[k] for k in ('id','name','email','role')}
             if path=='/api/session' and method=='GET':
@@ -114,7 +123,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(200, {'allowed': True, 'message': f'{permission} permission verified.'})
             match = re.fullmatch(r'/api/access/groups/([1-9][0-9]*)(/manage)?', path)
             if method == 'GET' and match:
-                group = group_access(db, user, int(match[1]), manage=bool(match[2]))
+                raw_id = match[1]
+                if len(raw_id) > 19 or int(raw_id) > 9223372036854775807:
+                    raise APIError(400, 'Invalid study group ID.')
+                group = group_access(db, user, int(raw_id), manage=bool(match[2]))
                 return self.json(200, {'allowed': True, 'message': f'Access verified for {group["name"]}.', 'group': group})
             if method == 'POST' and path == '/api/access/check':
                 data = self.body()
@@ -127,7 +139,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def make_server(database,port=8000,demo=False,host='127.0.0.1'):
-    if demo and host not in ('127.0.0.1','localhost','::1'):
+    if ':' in host:
+        raise ValueError('IPv6 hosts are not supported by this server. Use 127.0.0.1.')
+    if demo and host not in ('127.0.0.1','localhost'):
         raise ValueError('Demo sessions are only available on a loopback address.')
     initialize(database)
     if demo:
@@ -142,9 +156,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--demo',action='store_true',help='Seed local fixtures and enable sample account selection. Never use with real data.')
     parser.add_argument('--port',type=int,default=8000)
-    parser.add_argument('--database',default=str(ROOT/'var/issue5.db'))
+    parser.add_argument('--database',help='Use a dedicated private database path; demo defaults to var/demo-access.db.')
     args=parser.parse_args()
-    server=make_server(args.database,args.port,args.demo)
+    database = args.database or str(ROOT/'var'/('demo-access.db' if args.demo else 'issue5.db'))
+    server=make_server(database,args.port,args.demo)
     print(f'Study Platform: http://127.0.0.1:{server.server_port}',flush=True)
     print('Mode: '+('LOCAL DEMO — sample account access enabled.' if args.demo else 'Integration — authentication module must provide sessions.'),flush=True)
     try:
