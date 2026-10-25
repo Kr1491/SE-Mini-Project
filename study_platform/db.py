@@ -23,6 +23,15 @@ CREATE TABLE IF NOT EXISTS memberships (
     user_id INTEGER NOT NULL REFERENCES users(id),
     PRIMARY KEY(group_id,user_id)
 );
+CREATE TABLE IF NOT EXISTS folders (
+    id INTEGER PRIMARY KEY,
+    group_id INTEGER NOT NULL REFERENCES study_groups(id),
+    name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 80),
+    name_key TEXT NOT NULL CHECK(length(name_key)>0),
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(group_id,name_key)
+);
 CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id),
     csrf_token TEXT NOT NULL, expires_at INTEGER NOT NULL,

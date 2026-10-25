@@ -1,12 +1,12 @@
-# Issue #5 — integration contract
+# Role access and group folders — integration contract
 
 ## Scope
 
-Python 3.11+, SQLite, and HTML/CSS/JavaScript; no package installation. This change supplies reusable sessions, server-side role/group authorization, and a generic permission-verification page. It does not implement the three later Krishna issues (#6 dashboards, #7 folders, #12 material access) or the teammates' modules.
+Python 3.11+, SQLite, and HTML/CSS/JavaScript; no package installation. The #5 foundation supplies reusable sessions, role/group authorization and a generic access-verification page. Issue #7 now adds group-folder listing and creation. Dashboards (#6), material access (#12) and teammate modules remain separate.
 
 ## Shared schema
 
-`study_platform/db.py` defines `users`, `study_groups`, `memberships`, and `sessions`. Group records/memberships are minimal prerequisite fixtures for testing scope, not group creation/joining endpoints. Folder/material schemas and operations belong to subsequent changes.
+`study_platform/db.py` defines `users`, `study_groups`, `memberships`, and `sessions`. Group records/memberships are minimal prerequisite fixtures for testing scope, not group creation/joining endpoints. The folder schema/operations are now supplied by #7; materials remain a subsequent change.
 
 Use `with connect(database_path) as db:` for a foreign-key-enabled connection and automatic commit/rollback/cleanup. Use parameterized SQL. Roles are exactly `student`, `instructor`, and `administrator`.
 
@@ -64,6 +64,22 @@ Errors return `{"error":"message"}`. Common statuses: 400 invalid request, 401 m
 
 - Jiya adds registration/login/logout and group creation in her PRs.
 - Anushree adds membership management, uploads, and upload validation in her PRs.
-- Krishna's next PRs separately add #6, then #7, then #12.
+- Krishna's High-priority #7 adds folders first; #12 material access follows, then Medium-priority #6 dashboards.
 - Every protected feature must call the relevant role/group authorization helpers on the server; hiding buttons alone does not protect an API.
 - Agree schema changes and test the real authenticated journey after merging the modules.
+
+
+## Issue #7 — folder contract
+
+- `GET /api/groups`: authorized group metadata for the picker; no group creation/membership mutation.
+- `GET /api/groups/{id}/folders`: returns `group`, `folders`, and server-derived `can_create`.
+- `POST /api/groups/{id}/folders`: accepts JSON `{"name":"Unit 1 notes"}` and the session CSRF header; returns 201 with `folder`. The transaction commits before sending success.
+- `GET /folders.js`: frontend module loaded before app.js. The access application calls its optional `StudyFolders.load(session)` after login/session detection and resets it before account switching.
+
+The additive `folders` table stores ID, group ID, display name, normalized casefold name key, creator ID, and creation timestamp. It enforces group-scoped unique keys and group/user foreign keys. The existing #5 schema and demo-fixture identity rules remain intact; added folder records do not alter reserved user/group/membership fixtures.
+
+Names use Unicode NFC, trimmed boundaries, 1–80 characters, and no control/hidden formatting characters. A group-scoped duplicate returns 409. The write transaction covers authorization and insertion, so concurrent duplicates produce one record. SQL/HTML-like names remain data and are rendered with textContent.
+
+Students/member instructors can read authorized groups' folders. Folder creation requires administrator access or instructor ownership of that group, consistent with the #5 policy. An instructor's membership alone does not grant management authority.
+
+Anushree's later upload implementation should reference a valid folder in the same group and use generated storage keys rather than display folder names as filesystem paths. No upload/material schema is introduced here. Jiya's real group creation should continue setting study_groups.created_by; the group picker recognizes that owner and authorized memberships.

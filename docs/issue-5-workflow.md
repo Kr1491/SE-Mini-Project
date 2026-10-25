@@ -70,12 +70,12 @@ Request a teammate's review, wait for the required checks, and address feedback.
 
 Merge the PR when ready, verify the feature in the integrated application, and set #5 to Done. GitHub may close the linked issue automatically when merging; still check the project card and actual verification.
 
-Then start #6 from updated `main`:
+Following the revised priority order, start High-priority #7 from updated `main`:
 
 ```bash
 git switch main
 git pull --ff-only origin main
-git switch -c feat/6-role-dashboards
+git switch -c feat/7-folder-creation
 ```
 
-Move #6 to Ready when its criteria/dependencies are clear, then In progress when you begin. Bring only its preserved dashboard implementation into that branch, adapting it to the merged #5 foundation. Repeat the same workflow for #7 and #12 after their predecessors are integrated. Do not restore the full four-issue snapshot over `main` wholesale.
+Move #7 to Ready when its criteria/dependencies are clear, then In progress when you begin. Apply only its dedicated folder change, following issue-7-workflow.md. Continue with High-priority #12 and then Medium-priority #6, keeping each issue on its own branch/PR. Do not restore the full four-issue snapshot over `main` wholesale.
