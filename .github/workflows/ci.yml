@@ -1,4 +1,4 @@
-name: Role access checks
+name: StudySpace checks
 on:
   push:
   pull_request:
@@ -18,9 +18,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Compile Python
         run: python -m compileall -q server.py study_platform tests
-      - name: Test role and group permissions
+      - name: Test authorization and material access
         run: python -m unittest discover -s tests -v
       - name: Test asynchronous browser behavior
-        run: node --test tests/test_frontend.cjs
+        run: node --test tests/*.cjs
       - name: Check browser JavaScript syntax
-        run: node --check static/app.js
+        run: |
+          node --check static/app.js
+          node --check static/materials.js

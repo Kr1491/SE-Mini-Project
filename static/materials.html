@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>StudySpace · Material library</title><link rel="stylesheet" href="/materials.css"><script src="/materials.js" defer></script></head>
+<body>
+<div id="demo-banner" class="demo-banner" hidden>LOCAL DEMO <span>Sample accounts and files. Uploading new material is a separate feature.</span></div>
+<header><a class="brand" href="/"><span class="brand-mark">S</span>StudySpace<span class="brand-dot">.</span></a><div class="header-links"><a href="/">Workspace ↗</a><span id="profile-name"></span></div></header>
+<main>
+<section class="page-heading"><div><p class="eyebrow">GOOD IDEAS ARE BETTER SHARED</p><h1>Your material library<span>.</span></h1><p class="intro">Find course resources, take a closer look, and keep a copy for your next study session.</p></div><span id="role-badge" class="role-badge" hidden></span></section>
+<section id="sample-panel" class="sample-panel" hidden><div><h2>Explore a sample account</h2><p>Each account sees the materials permitted by its groups.</p></div><div id="sample-accounts" class="account-buttons"><button type="button" data-account="2">Student</button><button type="button" data-account="1">Instructor</button><button type="button" data-account="3">Administrator</button><button type="button" data-account="4">Student without groups</button></div></section>
+<p id="library-status" class="message" role="status" aria-live="polite">Loading your library…</p>
+<section id="library" hidden aria-label="Study materials">
+<div class="toolbar"><div><label for="material-group">Study group</label><select id="material-group"><option value="">All permitted groups</option></select></div><button id="refresh-library" class="secondary-button" type="button">Refresh ↻</button></div>
+<div class="section-heading"><div><p class="eyebrow">A LITTLE KNOWLEDGE, WITHIN REACH</p><h2>Shared resources</h2></div><span id="material-count" class="count-label"></span></div>
+<div id="material-list" class="material-list"></div>
+<div class="pagination"><button id="previous-page" class="secondary-button" type="button" disabled>← Previous</button><span id="page-info" class="count-label"></span><button id="next-page" class="secondary-button" type="button" disabled>Next →</button></div>
+</section>
+<dialog id="preview-dialog" class="preview-dialog"><div class="preview-heading"><div><p class="eyebrow">TAKE A CLOSER LOOK</p><h2 id="preview-title"></h2></div><button id="close-preview" class="secondary-button" type="button">Close</button></div><p id="preview-status" class="message" role="status"></p><pre id="preview-text" hidden></pre><img id="preview-image" alt="Study material preview" hidden><iframe id="preview-frame" title="Study material PDF preview" hidden></iframe><button id="preview-download" class="primary-button" type="button">Download file ↓</button></dialog>
+<footer>A shared space for better learning.<span>StudySpace / Sprint 1</span></footer>
+</main>
+</body></html>
