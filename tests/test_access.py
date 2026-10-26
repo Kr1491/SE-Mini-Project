@@ -194,12 +194,11 @@ class AccessTests(unittest.TestCase):
 
     def test_other_backlog_features_are_not_implemented_in_this_change(self):
         self.login_sample(3)
-        for path in ['/api/dashboard', '/api/groups/1/folders', '/api/materials/1/view', '/api/materials/1/download']:
+        for path in ['/api/dashboard', '/api/materials/1/view', '/api/materials/1/download']:
             self.assertEqual(self.request('GET', path)[0], 404)
-        self.assertEqual(self.request('POST', '/api/groups/1/folders', {'name': 'Later issue'})[0], 404)
         with connect(self.database) as db:
             tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        self.assertFalse({'folders', 'materials'} & tables)
+        self.assertNotIn('materials', tables)
 
     def test_assets_load_without_exposing_database_files(self):
         for path in ['/', '/app.js', '/style.css']:

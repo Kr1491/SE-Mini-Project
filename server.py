@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run issue #5 access verification: python3 server.py --demo (local fixtures only)."""
+"""Run role-access and study-folder workspace: python3 server.py --demo (local fixtures only)."""
 import argparse
 import hashlib
 import json
@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from study_platform.db import connect, initialize
 from study_platform.demo import seed, validate_demo
+from study_platform.folders import available_groups, list_folders, create_folder, parse_group_id
 from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_session, current_session, group_access, require_permission
 
 ROOT = Path(__file__).resolve().parent
@@ -72,9 +73,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def dispatch(self, method):
         path = urlsplit(self.path).path
-        if method=='GET' and path in ('/','/app.js','/style.css'):
-            filename={'/':'index.html','/app.js':'app.js','/style.css':'style.css'}[path]
-            mime={'/':'text/html; charset=utf-8','/app.js':'text/javascript; charset=utf-8','/style.css':'text/css; charset=utf-8'}[path]
+        if method=='GET' and path in ('/','/app.js','/style.css','/folders.js'):
+            filename={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/folders.js':'folders.js'}[path]
+            mime={'/':'text/html; charset=utf-8','/app.js':'text/javascript; charset=utf-8','/style.css':'text/css; charset=utf-8','/folders.js':'text/javascript; charset=utf-8'}[path]
             return self.send_bytes(200,(ROOT/'static'/filename).read_bytes(),mime)
         if method=='GET' and path=='/api/health':
             return self.json(200,{'ok':True,'demo':self.server.demo})
@@ -112,6 +113,19 @@ class Handler(BaseHTTPRequestHandler):
             safe_user={k:user[k] for k in ('id','name','email','role')}
             if path=='/api/session' and method=='GET':
                 return self.json(200,{'user':safe_user,'csrf_token':user['csrf_token'],'permissions':PERMISSIONS[user['role']]})
+            if path == '/api/groups' and method == 'GET':
+                return self.json(200, {'groups': available_groups(db, user)})
+            folder_route = re.fullmatch(r'/api/groups/([1-9][0-9]*)/folders', path)
+            if folder_route:
+                group_id = parse_group_id(folder_route[1])
+                if method == 'GET':
+                    return self.json(200, list_folders(db, user, group_id))
+                if method == 'POST':
+                    data = self.body()
+                    folder = create_folder(db, user, group_id, data.get('name'))
+                    # Make the folder visible before the client receives success.
+                    db.commit()
+                    return self.json(201, {'folder': folder})
             permission_routes = {
                 '/api/access/instructor': 'instructor.summary',
                 '/api/access/admin': 'admin.summary',
