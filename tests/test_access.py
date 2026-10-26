@@ -193,14 +193,15 @@ class AccessTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/api/access/check', {'permission': ['wrong type']})[0], 400)
         self.assertEqual(self.request('POST', '/api/demo/session', {'user_id': True})[0], 400)
 
-    def test_other_backlog_features_are_not_implemented_in_this_change(self):
+    def test_folder_and_material_schemas_coexist_while_dashboard_is_separate(self):
         self.login_sample(3)
-        for path in ['/api/dashboard', '/api/groups/1/folders']:
+        for path in ['/api/dashboard']:
             self.assertEqual(self.request('GET', path)[0], 404)
-        self.assertEqual(self.request('POST', '/api/groups/1/folders', {'name': 'Later issue'})[0], 404)
+        self.assertEqual(self.request('GET', '/api/groups/1/folders')[0], 200)
+        self.assertEqual(self.request('GET', '/api/materials')[0], 200)
         with connect(self.database) as db:
             tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        self.assertNotIn('folders', tables)
+        self.assertTrue({'folders', 'materials'} <= tables)
 
     def test_assets_load_without_exposing_database_files(self):
         for path in ['/', '/app.js', '/style.css']:

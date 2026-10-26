@@ -282,6 +282,28 @@ class MaterialTests(unittest.TestCase):
         for path in self.storage.iterdir():
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
+    def test_folder_creation_and_material_access_share_the_session_and_database(self):
+        self.login_sample(1)
+        status, data, _ = self.request('POST', '/api/groups/1/folders', {'name': 'Integration notes'})
+        self.assertEqual(status, 201)
+        folder_id = data['folder']['id']
+        self.assertEqual(self.file()[0], 200)
+        with connect(self.database) as db:
+            from study_platform.db import initialize
+            initialize(self.database)
+            self.assertIsNotNone(db.execute('SELECT id FROM folders WHERE id=?', (folder_id,)).fetchone())
+            self.assertEqual(db.execute('SELECT count(*) FROM materials').fetchone()[0], 5)
+        self.login_sample(2)
+        status, data, _ = self.request('GET', '/api/groups/1/folders')
+        self.assertEqual(status, 200)
+        self.assertIn(folder_id, [folder['id'] for folder in data['folders']])
+        self.assertEqual(self.request('POST', '/api/groups/1/folders', {'name': 'Denied'})[0], 403)
+        self.assertEqual(self.file(action='download')[0], 200)
+        self.assertEqual(self.file(self.private)[0], 403)
+        _, page, _ = self.request('GET', '/')
+        self.assertIn(b'id="folders-panel"', page)
+        self.assertIn(b'href="/materials"', page)
+
     def test_library_assets_load(self):
         for path in ['/materials', '/materials/', '/materials.js', '/materials.css']:
             self.assertEqual(self.request('GET', path)[0], 200)
