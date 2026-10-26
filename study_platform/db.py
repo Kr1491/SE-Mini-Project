@@ -39,6 +39,19 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS memberships_user ON memberships(user_id);
 CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
+CREATE TABLE IF NOT EXISTS materials (
+    id INTEGER PRIMARY KEY,
+    group_id INTEGER NOT NULL REFERENCES study_groups(id),
+    title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 160),
+    original_name TEXT NOT NULL CHECK(length(original_name) BETWEEN 1 AND 255),
+    stored_name TEXT NOT NULL UNIQUE CHECK(length(stored_name) BETWEEN 1 AND 180),
+    content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+    size_bytes INTEGER NOT NULL CHECK(typeof(size_bytes)='integer' AND size_bytes>=0),
+    uploaded_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS materials_group ON materials(group_id);
+
 """
 
 

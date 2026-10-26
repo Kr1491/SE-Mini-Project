@@ -62,9 +62,10 @@ class AccessTests(unittest.TestCase):
         lines = head.decode().split('\r\n')
         status = int(lines[0].split()[1])
         response_headers = dict(line.split(': ', 1) for line in lines[1:])
-        if response_headers.get('Content-Type', '').startswith('application/json'):
+        if content and response_headers.get('Content-Type', '').startswith('application/json'):
             content = json.loads(content)
-        self.assertEqual(int(response_headers['Content-Length']), len(connection.output.getvalue().split(b'\r\n\r\n', 1)[1]))
+        if method != 'HEAD':
+            self.assertEqual(int(response_headers['Content-Length']), len(connection.output.getvalue().split(b'\r\n\r\n', 1)[1]))
         return status, content, response_headers
 
     def login_sample(self, user_id):
@@ -192,13 +193,15 @@ class AccessTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/api/access/check', {'permission': ['wrong type']})[0], 400)
         self.assertEqual(self.request('POST', '/api/demo/session', {'user_id': True})[0], 400)
 
-    def test_other_backlog_features_are_not_implemented_in_this_change(self):
+    def test_folder_and_material_schemas_coexist_while_dashboard_is_separate(self):
         self.login_sample(3)
-        for path in ['/api/dashboard', '/api/materials/1/view', '/api/materials/1/download']:
+        for path in ['/api/dashboard']:
             self.assertEqual(self.request('GET', path)[0], 404)
+        self.assertEqual(self.request('GET', '/api/groups/1/folders')[0], 200)
+        self.assertEqual(self.request('GET', '/api/materials')[0], 200)
         with connect(self.database) as db:
             tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        self.assertNotIn('materials', tables)
+        self.assertTrue({'folders', 'materials'} <= tables)
 
     def test_assets_load_without_exposing_database_files(self):
         for path in ['/', '/app.js', '/style.css']:

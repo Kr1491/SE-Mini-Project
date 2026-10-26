@@ -1,4 +1,4 @@
-name: Role access and folder checks
+name: StudySpace checks
 on:
   push:
   pull_request:
@@ -18,7 +18,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Compile Python
         run: python -m compileall -q server.py study_platform tests
-      - name: Test role and group permissions
+      - name: Test authorization, folders and material access
         run: python -m unittest discover -s tests -v
       - name: Test frontend behavior and contrast
         run: node --test tests/*.cjs
@@ -26,3 +26,4 @@ jobs:
         run: |
           node --check static/app.js
           node --check static/folders.js
+          node --check static/materials.js
