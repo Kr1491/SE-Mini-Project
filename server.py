@@ -186,6 +186,43 @@ class Handler(BaseHTTPRequestHandler):
                     raise APIError(400, 'Invalid study group ID.')
                 group = group_access(db, user, int(raw_id), manage=bool(match[2]))
                 return self.json(200, {'allowed': True, 'message': f'Access verified for {group["name"]}.', 'group': group})
+            if method == 'GET' and path == '/api/groups':
+                groups = db.execute(
+                    '''SELECT g.id, g.name, g.created_by
+                       FROM memberships m
+                       JOIN study_groups g ON g.id = m.group_id
+                       WHERE m.user_id = ?
+                       ORDER BY g.name COLLATE NOCASE, g.id''',
+                    (user['id'],)
+                ).fetchall()
+                return self.json(200, {'groups': [dict(g) for g in groups]})
+
+            join_match = re.fullmatch(r'/api/groups/([1-9][0-9]*)/join', path)
+            if method == 'POST' and join_match:
+                raw_id = join_match[1]
+                if len(raw_id) > 19 or int(raw_id) > 9223372036854775807:
+                    raise APIError(400, 'Invalid study group ID.')
+                if user['role'] != 'student':
+                    raise APIError(403, 'Only students can join study groups.')
+
+                group_id = int(raw_id)
+                group = db.execute(
+                    'SELECT id, name, created_by FROM study_groups WHERE id = ?',
+                    (group_id,)
+                ).fetchone()
+                if not group:
+                    raise APIError(404, 'Study group not found.')
+
+                result = db.execute(
+                    'INSERT OR IGNORE INTO memberships (group_id, user_id) VALUES (?, ?)',
+                    (group_id, user['id'])
+                )
+                already_member = result.rowcount == 0
+                return self.json(
+                    200 if already_member else 201,
+                    {'joined': True, 'already_member': already_member, 'group': dict(group)}
+                )
+
             if method == 'POST' and path == '/api/access/check':
                 data = self.body()
                 permission = data.get('permission')
