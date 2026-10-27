@@ -132,6 +132,21 @@
       if (token === revision) byId('refresh-dashboard').disabled = false;
     }
   });
+  byId('logout').addEventListener('click', async () => {
+    if (!currentSession || switching) return;
+    switching = true; ++revision;
+    byId('logout').disabled = true;
+    clearWorkspace(); status('Signing out…');
+    try {
+      await request('/api/logout', {method: 'POST', body: '{}'});
+      currentSession = null;
+      globalThis.location?.replace?.('/login');
+    } catch (error) {
+      currentSession = null;
+      if (error.status === 401) globalThis.location?.replace?.('/login');
+      else { byId('signed-out').hidden = false; status(error.message, true); }
+    } finally { switching = false; byId('logout').disabled = false; }
+  });
   byId('refresh-dashboard').addEventListener('click', async () => {
     if (!initialized || switching || byId('refresh-dashboard').disabled) return;
     const token = ++revision;

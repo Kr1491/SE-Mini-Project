@@ -40,9 +40,10 @@ function harness(fetch, pathname = '/dashboard') {
   const get = id => { if (!elements.has(id)) elements.set(id, new Element('div', id)); return elements.get(id); };
   const buttons = [1, 2, 3, 4].map(uid => { const b = new Element('button'); b.dataset.account = String(uid); return b; });
   get('sample-accounts').buttons = buttons;
+  const navigations = [];
   const document = {body: {dataset: {}}, title: '', getElementById: get, createElement: tag => { const n = new Element(tag); created.push(n); return n; }};
-  vm.runInNewContext(source, {document, fetch, location: {pathname}}, {filename: 'dashboard.js'});
-  return {get, document, created, select: uid => get('sample-accounts').handlers.click({target: buttons.find(b => Number(b.dataset.account) === uid)}),
+  vm.runInNewContext(source, {document, fetch, location: {pathname, replace: url => navigations.push(url)}}, {filename: 'dashboard.js'});
+  return {get, document, created, navigations, logout: () => get('logout').handlers.click(), select: uid => get('sample-accounts').handlers.click({target: buttons.find(b => Number(b.dataset.account) === uid)}),
     refresh: () => get('refresh-dashboard').handlers.click()};
 }
 function mockWorkspace(initial = 2, demo = true, customize = data => data) {
@@ -201,4 +202,20 @@ test('merged folder and material tools have working allowlisted action links', a
   assert.ok(links.includes('/access#folders-panel'));
   assert.ok(links.includes('/materials'));
   assert.equal(links.includes('/materials-redirect'), false);
+});
+
+
+test('sign out uses the session CSRF token, clears private content and opens login', async () => {
+  let logout;
+  const base = mockWorkspace(3);
+  const ui = harness(async (url, options) => {
+    if (url === '/api/logout') { logout = options; return response(200, {message:'Signed out.'}); }
+    return base(url, options);
+  });
+  await flush(); await ui.logout();
+  assert.equal(logout.method,'POST');
+  assert.equal(logout.headers['X-CSRF-Token'],'csrf');
+  assert.equal(ui.get('profile-name').textContent,'');
+  assert.equal(ui.get('dashboard-content').hidden,true);
+  assert.deepEqual(ui.navigations,['/login']);
 });

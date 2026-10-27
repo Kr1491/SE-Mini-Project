@@ -6,15 +6,15 @@
 <link rel="stylesheet" href="/dashboard.css"><script src="/dashboard.js" defer></script>
 </head>
 <body>
-<div id="demo-banner" class="demo-banner" hidden>LOCAL DEMO <span>Sample accounts and groups. Credential-based login is being integrated separately.</span></div>
+<div id="demo-banner" class="demo-banner" hidden>LOCAL DEMO <span>Sample accounts and groups. Choose a sample account to explore.</span></div>
 <div class="workspace">
 <aside class="sidebar"><a class="brand" href="/dashboard"><span class="brand-mark">S</span>StudySpace<span class="brand-dot">.</span></a><p class="nav-label">YOUR WORKSPACE</p><nav id="dashboard-nav" aria-label="Workspace navigation"></nav><a class="access-link" href="/access">Access checks ↗</a><div class="sidebar-bottom"><span class="status-dot"></span>A little progress, together.</div></aside>
 <div class="main-shell">
-<header class="topbar"><span>Workspace <span class="breadcrumb">/ Overview</span></span><div id="profile" class="profile" hidden><span id="profile-avatar" class="avatar"></span><div><strong id="profile-name"></strong><small id="profile-email"></small></div></div></header>
+<header class="topbar"><span>Workspace <span class="breadcrumb">/ Overview</span></span><div id="profile" class="profile" hidden><span id="profile-avatar" class="avatar"></span><div><strong id="profile-name"></strong><small id="profile-email"></small></div><button id="logout" class="text-button" type="button">Sign out</button></div></header>
 <main id="overview">
 <section id="sample-panel" class="sample-panel" hidden aria-labelledby="sample-heading"><div><h2 id="sample-heading">Explore a sample workspace</h2><p>Choose an account to preview its dashboard and permitted actions.</p></div><div id="sample-accounts" class="account-buttons"><button type="button" data-account="2">Student</button><button type="button" data-account="1">Instructor</button><button type="button" data-account="3">Administrator</button><button type="button" data-account="4">Student without groups</button></div></section>
 <p id="dashboard-status" class="status-message" role="status" aria-live="polite">Loading your workspace…</p>
-<section id="signed-out" class="signed-out" hidden><p class="eyebrow">A SHARED SPACE FOR BETTER LEARNING</p><h1>Your workspace<br>is waiting<span>.</span></h1><p id="signed-out-description">Sign in to see your groups and role-specific tools.</p><a class="secondary-button" href="/dashboard">Open my dashboard</a></section>
+<section id="signed-out" class="signed-out" hidden><p class="eyebrow">A SHARED SPACE FOR BETTER LEARNING</p><h1>Your workspace<br>is waiting<span>.</span></h1><p id="signed-out-description">Sign in to see your groups and role-specific tools.</p><a class="secondary-button" href="/login">Sign in</a></section>
 <div id="dashboard-content" hidden>
 <div class="page-heading"><div><p id="dashboard-eyebrow" class="eyebrow"></p><h1 id="dashboard-title"></h1><p id="dashboard-description" class="muted"></p></div><span id="dashboard-role" class="role-badge"></span></div>
 <section id="dashboard-stats" class="stats" aria-label="Workspace summary"></section>

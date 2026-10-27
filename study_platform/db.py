@@ -5,6 +5,20 @@ import stat
 from contextlib import contextmanager
 from pathlib import Path
 
+MATERIALS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS materials (
+    id INTEGER PRIMARY KEY,
+    group_id INTEGER NOT NULL REFERENCES study_groups(id),
+    title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 160),
+    original_name TEXT NOT NULL CHECK(length(original_name) BETWEEN 1 AND 255),
+    stored_name TEXT NOT NULL UNIQUE CHECK(length(stored_name) BETWEEN 1 AND 180),
+    content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+    size_bytes INTEGER NOT NULL CHECK(typeof(size_bytes)='integer' AND size_bytes>=0),
+    uploaded_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
 SCHEMA = """
 PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS users (
@@ -37,30 +51,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     csrf_token TEXT NOT NULL, expires_at INTEGER NOT NULL,
     is_demo INTEGER NOT NULL DEFAULT 0 CHECK(is_demo IN (0,1))
 );
-CREATE TABLE IF NOT EXISTS materials (
-    id INTEGER PRIMARY KEY,
-    group_id INTEGER NOT NULL REFERENCES study_groups(id),
-    uploaded_by INTEGER NOT NULL REFERENCES users(id),
-    filename TEXT NOT NULL,
-    stored_name TEXT NOT NULL UNIQUE,
-    content_type TEXT NOT NULL,
-    size_bytes INTEGER NOT NULL CHECK(size_bytes > 0),
-    created_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS materials_group ON materials(group_id);
 CREATE INDEX IF NOT EXISTS memberships_user ON memberships(user_id);
 CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
-CREATE TABLE IF NOT EXISTS materials (
-    id INTEGER PRIMARY KEY,
-    group_id INTEGER NOT NULL REFERENCES study_groups(id),
-    title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 160),
-    original_name TEXT NOT NULL CHECK(length(original_name) BETWEEN 1 AND 255),
-    stored_name TEXT NOT NULL UNIQUE CHECK(length(stored_name) BETWEEN 1 AND 180),
-    content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
-    size_bytes INTEGER NOT NULL CHECK(typeof(size_bytes)='integer' AND size_bytes>=0),
-    uploaded_by INTEGER NOT NULL REFERENCES users(id),
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+""" + MATERIALS_SCHEMA + """
 CREATE INDEX IF NOT EXISTS materials_group ON materials(group_id);
 
 """
@@ -99,10 +92,33 @@ def _secure_database(path):
         os.close(descriptor)
 
 
+def _migrate_upload_materials(db):
+    """Preserve records from the #11 filename-only schema in the shared schema."""
+    columns = {row['name'] for row in db.execute('PRAGMA table_info(materials)')}
+    if {'title', 'original_name'} <= columns:
+        return
+    if 'filename' not in columns:
+        raise ValueError('Unrecognized materials schema; existing data has been left unchanged.')
+    if not db.in_transaction:
+        db.execute('BEGIN IMMEDIATE')
+    db.execute(MATERIALS_SCHEMA.replace('IF NOT EXISTS materials', 'materials_migrated'))
+    db.execute("""INSERT INTO materials_migrated
+        (id,group_id,title,original_name,stored_name,content_type,size_bytes,uploaded_by,created_at)
+        SELECT id,group_id,coalesce(nullif(substr(filename,1,160),''),'Material'),filename,
+               stored_name,content_type,size_bytes,uploaded_by,
+               CASE WHEN typeof(created_at) IN ('integer','real')
+                    THEN datetime(created_at,'unixepoch') ELSE created_at END
+        FROM materials""")
+    db.execute('DROP TABLE materials')
+    db.execute('ALTER TABLE materials_migrated RENAME TO materials')
+    db.execute('CREATE INDEX materials_group ON materials(group_id)')
+
+
 def initialize(path):
     _secure_database(path)
     with connect(path) as db:
         db.executescript(SCHEMA)
+        _migrate_upload_materials(db)
         columns = {row['name']: row for row in db.execute('PRAGMA table_info(sessions)')}
         if 'is_demo' not in columns or not columns['token_hash']['notnull']:
             db.execute("""CREATE TABLE sessions_migrated (

@@ -151,5 +151,64 @@ class UploadTests(unittest.TestCase):
         self.assertIn('does not match PDF', result['error'])
 
 
+class MaterialSchemaCompatibilityTests(unittest.TestCase):
+    def test_legacy_upload_rows_survive_schema_migration_and_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'legacy.db'
+            initialize(path)
+            with connect(path) as db:
+                seed(db)
+                db.execute('DROP TABLE materials')
+                db.execute('''CREATE TABLE materials (
+                    id INTEGER PRIMARY KEY,group_id INTEGER NOT NULL REFERENCES study_groups(id),
+                    uploaded_by INTEGER NOT NULL REFERENCES users(id),filename TEXT NOT NULL,
+                    stored_name TEXT NOT NULL UNIQUE,content_type TEXT NOT NULL,
+                    size_bytes INTEGER NOT NULL CHECK(size_bytes>0),created_at INTEGER NOT NULL)''')
+                db.execute("INSERT INTO materials VALUES(42,1,1,'notes.txt','abc.txt','text/plain',5,1700000000)")
+            initialize(path);initialize(path)
+            with connect(path) as db:
+                row=db.execute('SELECT * FROM materials WHERE id=42').fetchone()
+                self.assertEqual((row['title'],row['original_name'],row['stored_name'],row['size_bytes']),('notes.txt','notes.txt','abc.txt',5))
+                self.assertEqual(row['created_at'],'2023-11-14 22:13:20')
+                self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
+
+    def test_new_upload_can_be_downloaded_with_shared_viewer(self):
+        fixture=UploadTests(methodName='test_supported_pdf_upload_and_listing')
+        fixture.setUp()
+        try:
+            fixture.login(1)
+            data=b'%PDF-1.4 shared download'
+            body,mime=fixture.multipart('new-notes.pdf',data)
+            status,result,_=fixture.request('POST','/api/groups/1/materials',body,mime)
+            self.assertEqual(status,201)
+            mid=result['material']['id']
+            status,saved,headers=fixture.request('GET',f'/api/materials/{mid}/download')
+            self.assertEqual((status,saved),(200,data))
+            self.assertIn('new-notes.pdf',headers['Content-Disposition'])
+            self.assertEqual(fixture.request('GET',f'/api/materials/{mid}/view')[0],200)
+        finally:
+            fixture.tearDown()
+
+
+    def test_unmigratable_legacy_row_is_not_deleted(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'legacy.db'
+            initialize(path)
+            with connect(path) as db:
+                seed(db)
+                db.execute('DROP TABLE materials')
+                db.execute("""CREATE TABLE materials (
+                    id INTEGER PRIMARY KEY,group_id INTEGER,uploaded_by INTEGER,
+                    filename TEXT,stored_name TEXT,content_type TEXT,
+                    size_bytes INTEGER,created_at INTEGER)""")
+                db.execute('INSERT INTO materials VALUES(1,1,1,?,?,?,?,?)',('x'*256,'legacy.txt','text/plain',1,1700000000))
+            with self.assertRaises(sqlite3.IntegrityError):
+                initialize(path)
+            with connect(path) as db:
+                self.assertEqual(db.execute('SELECT filename FROM materials').fetchone()[0],'x'*256)
+                self.assertFalse(db.execute("SELECT 1 FROM sqlite_master WHERE name='materials_migrated'").fetchone())
+
+
 if __name__ == '__main__':
     unittest.main()

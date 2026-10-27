@@ -18,6 +18,7 @@ from study_platform.materials import catalog, query_options, integer, initialize
 from study_platform.material_fixtures import seed_materials
 from study_platform.db import connect, initialize
 from study_platform.demo import seed, validate_demo
+from study_platform.auth import AuthError, login_user
 from study_platform.folders import available_groups, list_folders, create_folder, parse_group_id
 from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_session, current_session, group_access, require_permission
 
@@ -86,7 +87,7 @@ class Handler(BaseHTTPRequestHandler):
         self._response_started = False
         try:
             self.dispatch(method)
-        except APIError as exc:
+        except (APIError, AuthError) as exc:
             self.json(exc.status, {'error':exc.message})
         except (BrokenPipeError,ConnectionResetError):
             pass
@@ -97,6 +98,36 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.json(500, {'error':'The request could not be completed. Please try again.'})
 
+    def check_login_origin(self):
+        # JSON and same-origin checks prevent a third-party site logging the
+        # browser into an attacker's account (login CSRF).
+        origin = self.headers.get('Origin')
+        if self.headers.get('Sec-Fetch-Site') == 'cross-site':
+            raise APIError(403, 'Open the sign-in page on this site and try again.')
+        if origin:
+            try:
+                parsed = urlsplit(origin)
+            except ValueError:
+                raise APIError(403, 'Open the sign-in page on this site and try again.')
+            if parsed.scheme not in ('http', 'https') or parsed.netloc != self.headers.get('Host'):
+                raise APIError(403, 'Open the sign-in page on this site and try again.')
+
+    def revoke_cookie_session(self, db):
+        cookie = SimpleCookie()
+        try:
+            cookie.load(self.headers.get('Cookie', ''))
+        except CookieError:
+            return
+        if COOKIE_NAME in cookie:
+            token_hash = hashlib.sha256(cookie[COOKIE_NAME].value.encode()).hexdigest()
+            db.execute('DELETE FROM sessions WHERE token_hash=?', (token_hash,))
+
+    def session_cookie(self, token='', *, expire=False):
+        value = f'{COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={0 if expire else 28800}'
+        if getattr(self.server, 'secure_cookies', False):
+            value += '; Secure'
+        return value
+
     def dispatch(self, method):
         path = urlsplit(self.path).path
         dashboard_assets = {
@@ -106,6 +137,10 @@ class Handler(BaseHTTPRequestHandler):
             '/access': ('index.html', 'text/html; charset=utf-8'),
             '/dashboard.js': ('dashboard.js', 'text/javascript; charset=utf-8'),
             '/dashboard.css': ('dashboard.css', 'text/css; charset=utf-8'),
+            '/login': ('login.html', 'text/html; charset=utf-8'),
+            '/login/': ('login.html', 'text/html; charset=utf-8'),
+            '/login.js': ('login.js', 'text/javascript; charset=utf-8'),
+            '/login.css': ('login.css', 'text/css; charset=utf-8'),
         }
         if method == 'GET' and path in dashboard_assets:
             filename, mime = dashboard_assets[path]
@@ -126,6 +161,17 @@ class Handler(BaseHTTPRequestHandler):
             filename, mime = material_assets[path]
             return self.send_bytes(200, (ROOT/'static'/filename).read_bytes(), mime)
         with connect(self.server.database) as db:
+            if path == '/api/login' and method == 'POST':
+                self.check_login_origin()
+                data = self.body()
+                if self.server.demo:
+                    raise APIError(409, 'Sample accounts do not have passwords. Choose a demo account below.')
+                user = login_user(db, data.get('email'), data.get('password'))
+                self.revoke_cookie_session(db)
+                token, csrf = create_session(db, user['id'])
+                db.commit()
+                return self.json(200, {'user': user, 'csrf_token': csrf},
+                                 {'Set-Cookie': self.session_cookie(token)})
             if path=='/api/demo/session' and method=='POST':
                 if not self.server.demo:
                     raise APIError(404,'Route not found.')
@@ -151,11 +197,16 @@ class Handler(BaseHTTPRequestHandler):
                 token,csrf=create_session(db,uid,demo=True)
                 # Persist the token/revocation before sending it to the browser.
                 db.commit()
-                return self.json(200,{'csrf_token':csrf}, {'Set-Cookie':f'{COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800'})
+                return self.json(200,{'csrf_token':csrf}, {'Set-Cookie': self.session_cookie(token)})
             user=current_session(db,self.headers.get('Cookie'),allow_demo=self.server.demo)
             if method=='POST':
                 if not secrets.compare_digest(self.headers.get('X-CSRF-Token','').encode('utf-8'),user['csrf_token'].encode('utf-8')):
                     raise APIError(403,'Invalid request token. Refresh the page and try again.')
+            if path == '/api/logout' and method == 'POST':
+                self.revoke_cookie_session(db)
+                db.commit()
+                return self.json(200, {'message': 'Signed out.'},
+                                 {'Set-Cookie': self.session_cookie(expire=True)})
             dashboard_route = re.fullmatch(r'/api/dashboard(?:/([a-z]+))?', path)
             if method == 'GET' and dashboard_route:
                 if dashboard_route[1]:
@@ -281,6 +332,8 @@ class Handler(BaseHTTPRequestHandler):
                     raise APIError(400, 'The file must have a filename.')
 
                 filename = Path(filename.replace('\\', '/')).name.strip()
+                if len(filename) > 255:
+                    raise APIError(400, 'Use a filename of at most 255 characters.')
                 extension = Path(filename).suffix.lower()
                 if not filename or filename in ('.', '..') or extension not in ALLOWED_EXTENSIONS:
                     raise APIError(415, 'Unsupported file format. Allowed: PDF, TXT, DOCX, PPTX.')
@@ -305,10 +358,8 @@ class Handler(BaseHTTPRequestHandler):
                         raise APIError(415, 'The file content is not valid text.')
 
                 stored_name = uuid.uuid4().hex + extension
-                upload_dir = Path(getattr(self.server, 'upload_dir', ROOT / 'var' / 'uploads'))
-                upload_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-                if os.name == 'posix':
-                    os.chmod(upload_dir, 0o700)
+                upload_dir = Path(getattr(self.server, 'storage', getattr(self.server, 'upload_dir', ROOT / 'var' / 'uploads')))
+                initialize_storage(upload_dir)
                 stored_path = upload_dir / stored_name
 
                 descriptor = os.open(
@@ -321,11 +372,11 @@ class Handler(BaseHTTPRequestHandler):
                         output.write(data)
                     cursor = db.execute(
                         'INSERT INTO materials '
-                        '(group_id, uploaded_by, filename, stored_name, content_type, size_bytes, created_at) '
+                        '(group_id, uploaded_by, title, original_name, stored_name, content_type, size_bytes) '
                         'VALUES (?, ?, ?, ?, ?, ?, ?)',
-                        (group['id'], user['id'], filename, stored_name,
-                         expected_type, len(data), int(__import__('time').time()))
-                    )
+                        (group['id'], user['id'], filename[:160], filename, stored_name,
+                         expected_type, len(data)))
+                    db.commit()
                 except Exception:
                     stored_path.unlink(missing_ok=True)
                     raise
@@ -346,36 +397,11 @@ class Handler(BaseHTTPRequestHandler):
                     raise APIError(400, 'Invalid study group ID.')
                 group = group_access(db, user, int(raw_id))
                 rows = db.execute(
-                    'SELECT id, group_id, uploaded_by, filename, content_type, size_bytes, created_at '
+                    'SELECT id, group_id, uploaded_by, original_name AS filename, content_type, size_bytes, created_at '
                     'FROM materials WHERE group_id = ? ORDER BY created_at DESC, id DESC',
                     (group['id'],)
                 ).fetchall()
                 return self.json(200, {'materials': [dict(row) for row in rows]})
-
-            download_match = re.fullmatch(r'/api/materials/([1-9][0-9]*)/download', path)
-            if method == 'GET' and download_match:
-                raw_id = download_match[1]
-                if len(raw_id) > 19 or int(raw_id) > 9223372036854775807:
-                    raise APIError(400, 'Invalid material ID.')
-                material = db.execute(
-                    'SELECT * FROM materials WHERE id = ?', (int(raw_id),)
-                ).fetchone()
-                if not material:
-                    raise APIError(404, 'Study material not found.')
-
-                group_access(db, user, material['group_id'])
-                upload_dir = Path(getattr(self.server, 'upload_dir', ROOT / 'var' / 'uploads'))
-                stored_path = upload_dir / material['stored_name']
-                try:
-                    content = stored_path.read_bytes()
-                except OSError:
-                    raise APIError(404, 'Stored file is unavailable.')
-
-                safe_filename = material['filename'].replace('"', '').replace('\r', '').replace('\n', '')
-                return self.send_bytes(
-                    200, content, material['content_type'],
-                    {'Content-Disposition': f'attachment; filename="{safe_filename}"'}
-                )
 
             if method == 'POST' and path == '/api/access/check':
                 data = self.body()
@@ -393,7 +419,7 @@ class Handler(BaseHTTPRequestHandler):
             material_route = re.fullmatch(r'/api/materials/([1-9][0-9]*)/(view|download)', path)
             if material_route and method in ('GET', 'HEAD'):
                 material_id = integer(material_route[1], label='material ID')
-                storage = self.server.storage
+                storage = getattr(self.server, 'storage', getattr(self.server, 'upload_dir', ROOT / 'var' / 'uploads'))
                 with open_material(db, user, material_id, storage, download=material_route[2] == 'download') as resource:
                     range_header = self.headers.get('Range') if method == 'GET' and not self.headers.get('If-Range') else None
                     try:
@@ -430,7 +456,7 @@ class Handler(BaseHTTPRequestHandler):
             raise APIError(404,'Route not found.')
 
 
-def make_server(database,port=8000,demo=False,host='127.0.0.1',storage=None):
+def make_server(database,port=8000,demo=False,host='127.0.0.1',storage=None,secure_cookies=False):
     if ':' in host:
         raise ValueError('IPv6 hosts are not supported by this server. Use 127.0.0.1.')
     if demo and host not in ('127.0.0.1','localhost'):
@@ -444,6 +470,7 @@ def make_server(database,port=8000,demo=False,host='127.0.0.1',storage=None):
             seed_materials(db, storage)
     server=ThreadingHTTPServer((host,port),Handler)
     server.database,server.demo,server.storage=str(database),demo,str(storage)
+    server.secure_cookies = secure_cookies
     return server
 
 
@@ -453,9 +480,10 @@ def main():
     parser.add_argument('--port',type=int,default=8000)
     parser.add_argument('--database',help='Use a dedicated private database path; demo defaults to var/demo-access.db.')
     parser.add_argument('--storage', help='Private material storage directory (flat generated filenames).')
+    parser.add_argument('--secure-cookies', action='store_true', help='Require HTTPS for session cookies when deployed behind a TLS proxy.')
     args=parser.parse_args()
     database = args.database or str(ROOT/'var'/('demo-access.db' if args.demo else 'issue5.db'))
-    server=make_server(database,args.port,args.demo,storage=args.storage)
+    server=make_server(database,args.port,args.demo,storage=args.storage,secure_cookies=args.secure_cookies)
     print(f'Study Platform: http://127.0.0.1:{server.server_port}',flush=True)
     print('Mode: '+('LOCAL DEMO — sample account access enabled.' if args.demo else 'Integration — authentication module must provide sessions.'),flush=True)
     try:

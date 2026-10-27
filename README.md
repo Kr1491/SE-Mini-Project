@@ -1,6 +1,6 @@
 # StudySpace — role dashboards, group folders and materials
 
-StudySpace opens a role-specific dashboard with database-backed summaries, scoped groups, and navigation for students, instructors, and administrators. #6 incorporates merged role access (#5), folders (#7), and material viewing/downloading (#12), linking the protected workspaces without replacing their authorization checks. Real registration/login, uploads, quizzes, and user-management operations remain their separate modules.
+StudySpace opens a role-specific dashboard with database-backed summaries, scoped groups, and navigation for students, instructors, and administrators. #6 incorporates merged role access (#5), folders (#7), and material viewing/downloading (#12), linking the protected workspaces without replacing their authorization checks. The basic login page uses the merged registration password helpers. Registration UI, quiz features and user-management operations remain separate integration work.
 
 ## Run locally
 
@@ -12,15 +12,19 @@ chmod 700 var
 python3 server.py --demo --port 8003
 ```
 
-Open **http://127.0.0.1:8003/materials**. Open `/` or `/dashboard` for the role-specific dashboard. Its folder action opens `/access#folders-panel`; its material action opens `/materials`. The access-verification console and folder form remain at `/access`. Stop with **Ctrl+C**.
+Open **http://127.0.0.1:8003/login** for sign-in or a sample account. The material library is at `/materials`. Open `/` or `/dashboard` for the role-specific dashboard. Its folder action opens `/access#folders-panel`; its material action opens `/materials`. The access-verification console and folder form remain at `/access`. Stop with **Ctrl+C**.
 
 Explicit `--demo` creates five small sample resources: PDF, PNG, Python source, DOCX, and private-group text. Student and instructor accounts see four; the administrator sees all five; the student without memberships sees none. This is a local fixture selector, not credential login or uploading. Demo accounts/groups must be unchanged fixtures in a dedicated database; fixture conflicts fail without overwriting existing data. Existing #5 demo databases with the correct marker can gain the material fixtures. Files with conflicting names or bytes are never overwritten.
 
-By default, demo mode uses `var/demo-access.db` and private `var/demo-materials/`; normal mode uses `var/issue5.db` and `var/materials/`. Override with `--database` and `--storage`. Do not point demo mode at real data. Database permissions are `0600`, and database/storage directories must be privately owned `0700` directories. Normal mode disables sample selection and rejects demo tokens; Jiya's credential login integration must issue real sessions as described in [integration.md](docs/integration.md).
+By default, demo mode uses `var/demo-access.db` and private `var/demo-materials/`; normal mode uses `var/issue5.db` and `var/materials/`. Override with `--database` and `--storage`. Do not point demo mode at real data. Database permissions are `0600`, and database/storage directories must be privately owned `0700` directories. Normal mode disables sample selection and rejects demo tokens. Credential login now verifies existing registered accounts; see [login.md](docs/login.md) for normal-mode account setup and HTTPS cookie configuration.
+
+## Sign in
+
+Open `/login` for the email/password form. Registered accounts sign in to their role dashboard and can Sign out from the profile. In local demo mode, use the clearly labelled sample account buttons; fixtures have no passwords. [Setup, API and verification details](docs/login.md).
 
 ## Role dashboards
 
-Students see their groups and active study partners; instructors see their owned/joined groups and teaching tools; administrators see global active-user/group/membership counts and administration tools. Summaries come from the current database. Direct `/dashboard/{student|instructor|administrator}` pages and corresponding APIs require the exact authenticated role. Account switching clears old private content and ignores stale responses. Dashboard links preserve the authorization checks of the destination feature; they do not implement real login, quizzes, uploads, or account management.
+Students see their groups and active study partners; instructors see their owned/joined groups and teaching tools; administrators see global active-user/group/membership counts and administration tools. Summaries come from the current database. Direct `/dashboard/{student|instructor|administrator}` pages and corresponding APIs require the exact authenticated role. Account switching clears old private content and ignores stale responses. Dashboard links preserve the authorization checks of the destination feature; they retain the authorization checks of those features. Quiz and account-management tools remain unavailable until implemented.
 
 ## Group folders
 
@@ -41,6 +45,7 @@ Material access is **group-scoped**. The #7 folder table and routes are preserve
 ```bash
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q server.py study_platform tests
+node --check static/login.js
 node --check static/app.js
 node --check static/dashboard.js
 node --check static/folders.js
@@ -50,7 +55,7 @@ node --test tests/*.cjs
 
 Node.js is required only for frontend tests and syntax checks. The Python suite dispatches actual HTTP handlers over in-memory connections with temporary SQLite databases; it needs no listening port. Frontend tests execute the actual JavaScript with a simulated DOM and fetch responses.
 
-Local results: **92 Python tests** pass on Python 3.12 and 3.14; **41 JavaScript tests** pass. CI retains pinned actions and Python 3.11/3.12 coverage. Live HTTP integration checks pass on a loopback server. Interactive browser verification and remote CI remain pending your run/push.
+Local results: **119 Python tests** pass on Python 3.12 and 3.14; **52 JavaScript tests** pass. CI retains pinned actions and Python 3.11/3.12 coverage. Live HTTP integration checks pass on a loopback server. An isolated Chrome sign-in/sign-out flow passes; updated remote CI follows the push.
 
 ## Issue documents
 

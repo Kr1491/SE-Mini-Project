@@ -135,3 +135,33 @@ def register_user(db, data):
         "email": account["email"],
         "role": account["role"],
     }
+
+
+# Run an equivalent password check for unknown accounts; never use this as an account.
+_DUMMY_PASSWORD_HASH = 'pbkdf2_sha256$600000$a4f183de039e41d9886b17c273ecb55a$95c17fe41e96ac8e1a26176b999145817c70325258e685a24f3daddaf484fcb3'
+
+
+def login_user(db, email, password):
+    """Verify an existing account and lock its checked state until session commit."""
+    if not isinstance(email, str) or not isinstance(password, str):
+        raise AuthError(400, 'Enter your email and password.')
+    email = email.strip().lower()
+    if not email or len(email) > 254 or not password or len(password) > 128:
+        raise AuthError(400, 'Enter a valid email and password.')
+    try:
+        email.encode('utf-8'); password.encode('utf-8')
+    except UnicodeError:
+        raise AuthError(400, 'Enter a valid email and password.')
+    user = db.execute('SELECT * FROM users WHERE email=?', (email,)).fetchone()
+    stored_hash = user['password_hash'] if user and user['password_hash'] else _DUMMY_PASSWORD_HASH
+    valid = verify_password(password, stored_hash)
+    if not user or not valid or not user['is_active']:
+        raise AuthError(401, 'Invalid email or password.')
+    # Recheck after password verification so a concurrent password/status change
+    # cannot issue a session using credentials that have just been replaced.
+    if not db.in_transaction:
+        db.execute('BEGIN IMMEDIATE')
+    current = db.execute('SELECT * FROM users WHERE id=?', (user['id'],)).fetchone()
+    if not current or not current['is_active'] or current['password_hash'] != stored_hash:
+        raise AuthError(401, 'Invalid email or password.')
+    return {key: current[key] for key in ('id', 'name', 'email', 'role')}
