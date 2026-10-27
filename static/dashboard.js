@@ -41,7 +41,7 @@
     delete document.body.dataset.role;
   }
   function safeHref(value) {
-    return typeof value === 'string' && (/^#[a-z0-9-]+$/.test(value) || value === '/access' || value === '/access#folders-panel') ? value : null;
+    return typeof value === 'string' && (/^#[a-z0-9-]+$/.test(value) || value === '/access' || value === '/access#folders-panel' || value === '/materials') ? value : null;
   }
   function render(data) {
     document.body.dataset.role = data.role;

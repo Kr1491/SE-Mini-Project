@@ -1,63 +1,66 @@
-# StudySpace — role-specific dashboards
+# StudySpace — role dashboards, group folders and materials
 
-Issue **#6** adds separate Student, Instructor, and Administrator dashboard experiences on top of the merged #5 role-access foundation. The dashboard is the application landing page at `/` or `/dashboard`; the existing access/group-folder workspace remains at `/access`.
+StudySpace opens a role-specific dashboard with database-backed summaries, scoped groups, and navigation for students, instructors, and administrators. #6 incorporates merged role access (#5), folders (#7), and material viewing/downloading (#12), linking the protected workspaces without replacing their authorization checks. Real registration/login, uploads, quizzes, and user-management operations remain their separate modules.
 
-The change is independent of #7's review branch. If #7 is already present, its folder workspace is linked automatically; otherwise folders remain clearly unavailable. This PR does not implement group creation, uploads, material access, quizzes, results, or user-management operations.
+## Run locally
 
-## Run
-
-Python 3.11+; no extra Python packages or frontend build step.
+Use Python 3.11+ on macOS or Linux. No Python packages or frontend build step are required.
 
 ```bash
 mkdir -p var
 chmod 700 var
-python3 server.py --demo
+python3 server.py --demo --port 8003
 ```
 
-Open **http://127.0.0.1:8000**. Stop with Ctrl+C. Use `--port 8002` and the matching URL if another development server is using port 8000.
+Open **http://127.0.0.1:8003/materials**. Open `/` or `/dashboard` for the role-specific dashboard. Its folder action opens `/access#folders-panel`; its material action opens `/materials`. The access-verification console and folder form remain at `/access`. Stop with **Ctrl+C**.
 
-Demo accounts/groups are explicit local fixtures rather than credential-based login. Demo mode is loopback-only and uses `var/demo-access.db`; normal mode uses `var/issue5.db` and requires Jiya's verified login/session integration. Existing private-database and demo-fixture checks remain in force. No schema or data migration is introduced by #6.
+Explicit `--demo` creates five small sample resources: PDF, PNG, Python source, DOCX, and private-group text. Student and instructor accounts see four; the administrator sees all five; the student without memberships sees none. This is a local fixture selector, not credential login or uploading. Demo accounts/groups must be unchanged fixtures in a dedicated database; fixture conflicts fail without overwriting existing data. Existing #5 demo databases with the correct marker can gain the material fixtures. Files with conflicting names or bytes are never overwritten.
 
-## What each role sees
+By default, demo mode uses `var/demo-access.db` and private `var/demo-materials/`; normal mode uses `var/issue5.db` and `var/materials/`. Override with `--database` and `--storage`. Do not point demo mode at real data. Database permissions are `0600`, and database/storage directories must be privately owned `0700` directories. Normal mode disables sample selection and rejects demo tokens; Jiya's credential login integration must issue real sessions as described in [integration.md](docs/integration.md).
 
-| Role | Summary | Navigation and tools |
-|---|---|---|
-| Student | Accessible groups and active study partners within those groups. | Study groups, learning tools, and available group folders. |
-| Instructor | Owned group count and other groups joined. | Teaching groups, teaching tools, and permitted folder access. |
-| Administrator | Active account, study group, and membership counts. | All groups, administration tools, and access checks. |
+## Role dashboards
 
-Counts and group names come from the database. The server derives the role from the current session; query parameters cannot request another user's or role's data. Missing/inactive/expired sessions are rejected, and group scope changes appear on refresh.
+Students see their groups and active study partners; instructors see their owned/joined groups and teaching tools; administrators see global active-user/group/membership counts and administration tools. Summaries come from the current database. Direct `/dashboard/{student|instructor|administrator}` pages and corresponding APIs require the exact authenticated role. Account switching clears old private content and ignores stale responses. Dashboard links preserve the authorization checks of the destination feature; they do not implement real login, quizzes, uploads, or account management.
 
-Not-yet-implemented tools show **Coming soon** without an action link. The page does not invent quiz/material counts or imply that future features are complete. Names are rendered as literal text. Dashboard and account refreshes discard stale responses, and failures clear the previous account's data.
+## Group folders
 
-Optional direct role pages `/dashboard/student`, `/dashboard/instructor`, and `/dashboard/administrator` require the matching authenticated role. Generic `/dashboard` opens the current account's dashboard. `/access` preserves the existing permission checks and, once #7 is merged, its folder UI.
+Open `/access` to use the group folder picker and creation form alongside the access-verification console. Instructors can create folders in groups they own, administrators in any group, and members can read their permitted groups' folders. Names are trimmed/Unicode-normalized, limited to 1–80 characters, and unique without case differences within a group. Records persist across restarts; validation, duplicate feedback, CSRF protection, and group access checks remain active.
 
-## Try it
+## Library behavior
 
-1. Choose Student, Instructor, then Administrator. Check that headings, summaries, navigation and tools change for each role.
-2. Choose Student without groups. It should show a clear empty group state and no private group data.
-3. Use Refresh overview and confirm the current account's data stays consistent.
-4. Try another role's direct page: the backend must reject it.
-5. If #7 is present, open Group folders and verify the existing folder workspace still works at `/access#folders-panel`.
-6. Check a narrow browser width and the browser console.
+- Filter by an authorized study group, refresh, and page through up to 24 resources at a time.
+- Preview UTF-8 text/code as literal text, PDFs, and supported PNG/JPEG/GIF/WebP images. Large text above 2 MiB uses download instead. PDF display depends on the browser's PDF support; Download remains available.
+- Download original file bytes with a safe original filename. Office documents and unsupported/active formats are download-only. The server derives safe inline types from the extension and byte signature rather than trusting stored MIME metadata.
+- Downloads stream in bounded 64 KiB chunks. Protected single-byte range requests support PDF seeking and partial transfers; unsupported multipart ranges fall back to a full response.
+- Missing, incomplete, unauthorized, or expired-session requests produce clear feedback. Account/group changes clear previews and ignore stale responses.
 
-## Checks and evidence
+Material access is **group-scoped**. The #7 folder table and routes are preserved alongside the #12 material schema. Materials currently reference groups; linking uploads to destination folders remains part of the upload integration. Folder association, uploads (#8), and format/size validation before upload (#11) require the documented handoff to Anushree. The generated demo files let this PR be exercised without claiming those modules are complete. The dashboard Materials action now opens `/materials` for students, instructors, and administrators; access remains group-scoped at the API. Unimplemented quiz and user-management tools remain Coming soon.
+
+## Checks
 
 ```bash
 python3 -m unittest discover -s tests -v
-node --test tests/*.cjs
 python3 -m compileall -q server.py study_platform tests
 node --check static/app.js
 node --check static/dashboard.js
+node --check static/folders.js
+node --check static/materials.js
+node --test tests/*.cjs
 ```
 
-The #5-based version passes **51 Python tests and 15 Node tests**. Compatibility with #7 was also tested: **67 Python tests and 25 Node tests pass** with both features present. Python suites pass locally on 3.12 and 3.14; the declared 3.11 floor is covered by the configured CI matrix. These results use real HTTP handlers/SQLite with in-memory connections and actual frontend scripts in a controlled DOM/fetch harness. A live browser/socket check and remote CI results remain pending.
+Node.js is required only for frontend tests and syntax checks. The Python suite dispatches actual HTTP handlers over in-memory connections with temporary SQLite databases; it needs no listening port. Frontend tests execute the actual JavaScript with a simulated DOM and fetch responses.
 
-## PR and integration
+Local results: **92 Python tests** pass on Python 3.12 and 3.14; **41 JavaScript tests** pass. CI retains pinned actions and Python 3.11/3.12 coverage. Live HTTP integration checks pass on a loopback server. Interactive browser verification and remote CI remain pending your run/push.
 
-- [Issue #6 PR description](docs/issue-6-pr.md).
-- [Issue #6 test results](docs/issue-6-test-results.md).
-- [Issue #6 branch/PR/status workflow](docs/issue-6-workflow.md).
-- [Integration contract](docs/integration.md).
+## Issue documents
 
-Use `feat/6-role-dashboards` based on updated `main`. Its PR closes only #6. Keep #7's review branch and PR separate. All commits, pushes and PR creation are performed by Krishna.
+- [Dashboard PR description — closes #6 only](docs/issue-6-pr.md)
+- [Dashboard checks and conflict resolution](docs/issue-6-test-results.md)
+- [Finish updating existing PR #25](docs/issue-6-workflow.md)
+
+- [Manual checks and test evidence](docs/issue-12-test-results.md)
+- [Step-by-step branch, commit, PR, and board guide](docs/issue-12-workflow.md)
+- [PR description — closes #12 only](docs/issue-12-pr.md)
+- [Shared authentication, authorization, and upload integration contract](docs/integration.md)
+- [Merged #7 folder behavior and checks](docs/issue-7-test-results.md)
+- [Earlier #5 review fixes](docs/pr23-review-fixes.md)

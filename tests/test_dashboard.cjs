@@ -187,3 +187,18 @@ test('dashboard text palette meets normal-text contrast requirements', () => {
     assert.ok(contrast(foreground, background) >= 4.5, `${foreground} on ${background}`);
   }
 });
+
+
+test('merged folder and material tools have working allowlisted action links', async () => {
+  const ui = harness(mockWorkspace(2, true, data => {
+    data.actions.push({label: 'Folders', description: 'Group folders', available: true, href: '/access#folders-panel'});
+    data.actions.push({label: 'Materials', description: 'Shared files', available: true, href: '/materials'});
+    data.actions.push({label: 'Unsafe lookalike', description: 'Not a material endpoint', available: true, href: '/materials-redirect'});
+    return data;
+  }));
+  await flush();
+  const links = descendants(ui.get('tools')).filter(node => node.tagName === 'a').map(node => node.href);
+  assert.ok(links.includes('/access#folders-panel'));
+  assert.ok(links.includes('/materials'));
+  assert.equal(links.includes('/materials-redirect'), false);
+});

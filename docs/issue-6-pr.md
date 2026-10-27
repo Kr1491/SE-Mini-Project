@@ -1,14 +1,9 @@
-Builds role-specific Student, Instructor and Administrator dashboards with database-backed summaries, scoped study groups, role-appropriate navigation and feature availability. The landing page opens the current account's dashboard; direct role pages and APIs require the matching authenticated role.
+Build role-specific Student, Instructor and Administrator dashboards with database-backed summaries, scoped study groups, role-appropriate navigation and feature availability. The landing page opens the current account's dashboard; direct role pages and APIs require the matching authenticated role.
+
+This branch incorporates latest main, including merged folder (#7) and material (#12) features. Folder tools open `/access#folders-panel`; all three roles can open `/materials` when the server capability and material-read permission are present. Each destination retains session, role and group authorization. Existing access checks and folders remain at `/access`.
+
+Profile/group names render as literal text, failed refreshes clear private data, and account switching ignores stale responses. Unimplemented quiz and user-management tools stay Coming soon without dead links or invented counts. No real registration/login, upload, quiz, or account-management implementation is added.
+
+Validation: 92 Python tests pass on 3.12 and 3.14; 41 frontend tests pass. Compilation and all four JavaScript syntax checks pass. Live loopback HTTP checks pass for each role dashboard, cross-role denial, folder creation/listing, material downloads, HEAD/ranges, and private/nonmember denial. CI retains pinned actions and Python 3.11/3.12 coverage; updated remote CI and interactive browser verification remain pending.
 
 Closes #6
-
-The UI safely renders profile/group names, clears stale private data on failure, and ignores old refresh responses after account switching. Future tools are labelled Coming soon without dead links or invented counts. Existing access checks remain at /access, and the #7 folder workspace is linked only when its implementation is present.
-
-Validation:
-- #5-only base: 51 Python tests and 15 Node frontend tests pass.
-- #7 compatibility: 67 Python tests and 25 Node frontend tests pass.
-- Python suites pass locally on Python 3.12 and 3.14; compilation and JavaScript syntax checks pass.
-- CI retains the Python 3.11/3.12 matrix and pinned Actions; remote runs are pending the push.
-- Live-browser/TCP verification remains manual due to the execution environment's socket-binding restriction.
-
-This PR depends on the merged #5 foundation and is independent of #7's review. It adds no registration/login, upload/material, quiz, or administrator user-management implementation.

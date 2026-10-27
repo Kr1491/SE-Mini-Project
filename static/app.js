@@ -29,11 +29,13 @@ async function showAccess(revision) {
   }
   $("check-result").textContent = "";
   $("check-result").classList.remove("allowed");
+  await globalThis.StudyFolders?.load(session);
 }
 $("accounts").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-user]");
   if (!button || !initialized || selectingAccount) return;
   selectingAccount = true;
+  globalThis.StudyFolders?.reset();
   const revision = ++accountRevision;
   ++probeSequence;
   const buttons = [...$("accounts").querySelectorAll("button")];

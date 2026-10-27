@@ -139,8 +139,8 @@ class DashboardTests(unittest.TestCase):
                 if not action['available']:
                     self.assertIsNone(action['href'])
                 else:
-                    self.assertIn(action['href'], ['#study-groups', '/access', '/access#folders-panel'])
-            for key in ['materials', 'quiz_attempts', 'results', 'quiz_creation', 'performance', 'user_management']:
+                    self.assertIn(action['href'], ['#study-groups', '/access', '/access#folders-panel', '/materials'])
+            for key in ['quiz_attempts', 'results', 'quiz_creation', 'performance', 'user_management']:
                 action = next((a for a in data['actions'] if a['key'] == key), None)
                 if action:
                     self.assertFalse(action['available'])
@@ -154,6 +154,22 @@ class DashboardTests(unittest.TestCase):
             action = next(a for a in self.dashboard()['actions'] if a['key'] == 'folders')
         self.assertTrue(action['available'])
         self.assertEqual(action['href'], '/access#folders-panel')
+
+    def test_material_workspace_is_linked_for_each_role_only_with_capability(self):
+        for uid in [1, 2, 3]:
+            self.login_sample(uid)
+            action = next(a for a in self.dashboard()['actions'] if a['key'] == 'materials')
+            self.assertTrue(action['available'])
+            self.assertEqual(action['href'], '/materials')
+            self.assertEqual(self.request('GET', action['href'])[0], 200)
+        with patch.object(server, 'open_material', None):
+            action = next(a for a in self.dashboard()['actions'] if a['key'] == 'materials')
+            self.assertFalse(action['available'])
+            self.assertIsNone(action['href'])
+        with patch.dict(server.PERMISSIONS, {'administrator': ['dashboard']}):
+            action = next(a for a in self.dashboard()['actions'] if a['key'] == 'materials')
+            self.assertFalse(action['available'])
+            self.assertIsNone(action['href'])
 
     def test_normal_mode_uses_real_issued_sessions_and_rejects_demo_sessions(self):
         self.login_sample(1)

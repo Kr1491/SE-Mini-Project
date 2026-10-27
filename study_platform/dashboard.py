@@ -65,18 +65,19 @@ def build_dashboard(db, user, *, features=None):
     folders_available = bool((features or {}).get('folders'))
     group_action = {'key': 'groups', 'label': details['group_heading'], 'description': 'See the groups available to your account.', 'available': True, 'href': '#study-groups'}
     folder_action = {'key': 'folders', 'label': 'Group folders', 'description': 'Organize and browse folders in your permitted study groups.', 'available': folders_available, 'href': '/access#folders-panel' if folders_available else None}
+    materials_available = bool((features or {}).get('materials')) and 'materials.read' in PERMISSIONS[role]
+    material_action = {'key': 'materials', 'label': 'Study materials', 'description': 'Read and download shared course resources.', 'available': materials_available, 'href': '/materials' if materials_available else None}
     upcoming = {
-        'materials': ('Study materials', 'Read and download shared course resources.'),
         'quiz_attempts': ('Available quizzes', 'Practice with quizzes published for your groups.'),
         'results': ('Your results', 'Review your quiz scores and progress.'),
         'quiz_creation': ('Create quizzes', 'Prepare questions and assessments for your students.'),
         'performance': ('Student performance', 'Review learning outcomes for your teaching groups.'),
         'user_management': ('Users and permissions', 'Manage accounts and their permitted actions.'),
     }
-    keys = {'student': ['materials', 'quiz_attempts', 'results'],
+    keys = {'student': ['quiz_attempts', 'results'],
             'instructor': ['quiz_creation', 'performance'],
             'administrator': ['user_management']}[role]
-    actions = [group_action, folder_action]
+    actions = [group_action, folder_action, material_action]
     actions.extend({'key': key, 'label': upcoming[key][0], 'description': upcoming[key][1], 'available': False, 'href': None} for key in keys)
     if role == 'administrator':
         actions.append({'key': 'access_checks', 'label': 'Access checks', 'description': 'Verify role and group access for this account.', 'available': True, 'href': '/access'})
