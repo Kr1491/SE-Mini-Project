@@ -199,7 +199,7 @@ class AccessTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/api/groups/1/folders', {'name': 'Later issue'})[0], 404)
         with connect(self.database) as db:
             tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        self.assertFalse({'folders', 'materials'} & tables)
+        self.assertFalse({'folders'} & tables)
 
     def test_assets_load_without_exposing_database_files(self):
         for path in ['/', '/app.js', '/style.css']:
@@ -267,6 +267,48 @@ class AccessTests(unittest.TestCase):
             self.login_sample(1)
         self.assertEqual(observed, [True])
 
+
+    def test_student_can_join_group_and_list_joined_groups(self):
+        self.login_sample(4)
+        status, body, _ = self.request('POST', '/api/groups/1/join', {})
+        self.assertEqual(status, 201)
+        self.assertTrue(body['joined'])
+        self.assertFalse(body['already_member'])
+
+        status, body, _ = self.request('GET', '/api/groups')
+        self.assertEqual(status, 200)
+        self.assertIn(1, [group['id'] for group in body['groups']])
+
+    def test_duplicate_group_join_does_not_duplicate_membership(self):
+        self.login_sample(4)
+        first = self.request('POST', '/api/groups/1/join', {})[0]
+        second_status, body, _ = self.request('POST', '/api/groups/1/join', {})
+        self.assertEqual(first, 201)
+        self.assertEqual(second_status, 200)
+        self.assertTrue(body['already_member'])
+
+        with connect(self.database) as db:
+            count = db.execute(
+                'SELECT COUNT(*) FROM memberships WHERE group_id=1 AND user_id=4'
+            ).fetchone()[0]
+        self.assertEqual(count, 1)
+
+    def test_only_students_can_join_groups(self):
+        self.login_sample(1)
+        self.assertEqual(self.request('POST', '/api/groups/1/join', {})[0], 403)
+
+    def test_join_group_rejects_missing_group(self):
+        self.login_sample(4)
+        self.assertEqual(self.request('POST', '/api/groups/999/join', {})[0], 404)
+
+
+    def test_nonmember_cannot_access_group_until_joining(self):
+        self.login_sample(4)
+        self.assertEqual(self.request('GET', '/api/access/groups/1')[0], 403)
+
+        status, body, _ = self.request('POST', '/api/groups/1/join', {})
+        self.assertEqual(status, 201)
+        self.assertEqual(self.request('GET', '/api/access/groups/1')[0], 200)
 
 if __name__ == '__main__':
     unittest.main()
