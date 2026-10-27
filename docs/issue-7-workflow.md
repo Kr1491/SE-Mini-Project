@@ -1,5 +1,7 @@
 # Issue #7 — branch, PR, and board workflow
 
+Current route note: with dashboard #6, `/` is the dashboard; the existing folder/access workspace is at `/access`, and the material library remains at `/materials`. Earlier commands/results below describe that issue's preparation.
+
 #7 is High priority (P0), three story points, assigned to Krishna in Sprint 1. #6 is Medium priority; the revised sequence is **#7, then #12, then #6**, with each change developed on its own branch and PR.
 
 ## While #5 is still in review

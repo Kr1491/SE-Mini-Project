@@ -1,5 +1,7 @@
 # Issue #12 — verification
 
+Current route note: with dashboard #6, `/` is the dashboard; the existing folder/access workspace is at `/access`, and the material library remains at `/materials`. Earlier commands/results below describe that issue's preparation.
+
 ## Automated results
 
 - Python 3.12 and 3.14: **75 tests passed** on each interpreter: 35 authorization/review tests, 16 folder tests, and 24 material/integration tests.

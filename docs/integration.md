@@ -1,8 +1,8 @@
-# StudySpace — integration contract (#5, #7 and #12)
+# StudySpace — integration contract (#5, #6, #7 and #12)
 
 ## Scope
 
-Python 3.11+, SQLite, and HTML/CSS/JavaScript; no package installation. Merged #5 supplies reusable sessions, server-side role/group authorization, and an access-verification page. #12 adds the group-scoped material catalog, preview, and downloading. Merged #7 supplies authorized group folders. Dashboard #6 remains a separate review branch; teammates' authentication, group, membership, and upload modules remain separate work.
+Python 3.11+, SQLite, and HTML/CSS/JavaScript; no package installation. Merged #5 supplies reusable sessions, server-side role/group authorization, and an access-verification page. #12 adds the group-scoped material catalog, preview, and downloading. Merged #7 supplies authorized group folders. #6 adds the role-specific landing dashboards while retaining both features. Teammates' authentication, group, membership, and upload modules remain separate work.
 
 ## Shared schema
 
@@ -64,7 +64,7 @@ Errors return `{"error":"message"}`. Common statuses: 400 invalid request, 401 m
 
 - Jiya adds registration/login/logout and group creation in her PRs.
 - Anushree adds membership management, uploads, and upload validation in her PRs.
-- Krishna's #7 folders are merged; #6 dashboards remain in review. #12 includes the latest main and preserves the merged folder behavior. Recheck the combined journey after each merge.
+- Krishna's #7 folders and #12 materials are merged. #6 dashboards incorporate the latest main and link both protected workspaces. Recheck the combined journey after each merge.
 - Every protected feature must call the relevant role/group authorization helpers on the server; hiding buttons alone does not protect an API.
 - Agree schema changes and test the real authenticated journey after merging the modules.
 
@@ -102,10 +102,6 @@ All material endpoints require `materials.read`; administrators may read all gro
 
 Single byte ranges return 206/Content-Range; valid unsatisfiable ranges return 416. Unsupported/malformed/multipart ranges are ignored in favor of a full response. HEAD ignores Range. Since no range validators are issued, If-Range requests receive a full response. These choices follow [HTTP range semantics](https://www.rfc-editor.org/rfc/rfc9110.html#name-range). Download names use a stripped leaf name and UTF-8 `filename*` per [Content-Disposition](https://www.rfc-editor.org/rfc/rfc6266.html#section-4.3). Safe file opening uses [Python POSIX dir_fd support](https://docs.python.org/3.11/library/os.html#os.open).
 
-## Combining with the dashboard after review
-
-Keep each PR targeted at `Kr1491/SE-Mini-Project:main`. #12 incorporates merged #7 through main and preserves folder routes, frontend, schema and checks. Dashboard #6 remains separate. Once #6 merges, enable its Materials dashboard action with `/materials` in the dashboard capability/action link whitelist. Test login → dashboard → group/folder → upload → preview/download with real modules before claiming the complete sprint journey works.
-
 ## Issue #7 — folder contract
 
 - `GET /api/groups`: authorized group metadata for the picker; no group creation/membership mutation.
@@ -120,3 +116,18 @@ Names use Unicode NFC, trimmed boundaries, 1–80 characters, and no control/hid
 Students/member instructors can read authorized groups' folders. Folder creation requires administrator access or instructor ownership of that group, consistent with the #5 policy. An instructor's membership alone does not grant management authority.
 
 Anushree's later upload implementation should reference a valid folder in the same group and use generated storage keys rather than display folder names as filesystem paths. The folder feature does not implement uploads; #12 adds the separate material schema above. Jiya's real group creation should continue setting study_groups.created_by; the group picker recognizes that owner and authorized memberships.
+
+## Issue #6 — dashboard contract
+
+The root `/` and `/dashboard` serve the new dashboard shell. The existing access/folder workspace is preserved at `/access`; its app.js, style.css and folders.js retain their behavior.
+
+- `GET /api/dashboard` returns the current user's role-specific profile, navigation, summaries, scoped groups, available/pending actions and update timestamp.
+- `GET /api/dashboard/{student|instructor|administrator}` and matching `/dashboard/{role}` pages require the authenticated role to match; administrators do not impersonate other role dashboards through those URLs.
+- Query-string roles/user IDs are ignored. User identity, role, active status and demo provenance come from the existing session checks.
+- Student partner counts include active creators/members only within accessible groups. Instructor counts distinguish owned groups from memberships. Workspace-wide counts are returned only to administrators.
+- No password hashes, session tokens or CSRF values are included in dashboard JSON. Profile data belongs to the current account.
+- Navigation/action destinations are defined by the server and restricted by the frontend's allowlist. Unimplemented tools are unavailable, without fake counters or active links.
+
+The dashboard reads existing users/groups/memberships without a schema migration. `build_dashboard(..., features={'folders': ..., 'materials': ...})` receives server-derived capability information; the folder action is available only when the server has the #7 creation implementation loaded. It opens `/access#folders-panel`, where the existing group picker and authorization apply. The Materials action is available to each supported role when its material-serving capability is present and the role has `materials.read`; it opens `/materials`. The frontend allowlist permits that exact path. Both destinations retain their own session, role and group checks; dashboard visibility does not grant resource access.
+
+Jiya's future authentication UI should navigate to `/dashboard` after verified login/session creation. New group/membership records are reflected on refresh. Other feature owners should enable their tool metadata only after their protected routes exist. Preserve server-side role/group checks in every feature; dashboard visibility alone is not authorization.

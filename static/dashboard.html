@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StudySpace · Your workspace</title>
+<link rel="stylesheet" href="/dashboard.css"><script src="/dashboard.js" defer></script>
+</head>
+<body>
+<div id="demo-banner" class="demo-banner" hidden>LOCAL DEMO <span>Sample accounts and groups. Credential-based login is being integrated separately.</span></div>
+<div class="workspace">
+<aside class="sidebar"><a class="brand" href="/dashboard"><span class="brand-mark">S</span>StudySpace<span class="brand-dot">.</span></a><p class="nav-label">YOUR WORKSPACE</p><nav id="dashboard-nav" aria-label="Workspace navigation"></nav><a class="access-link" href="/access">Access checks ↗</a><div class="sidebar-bottom"><span class="status-dot"></span>A little progress, together.</div></aside>
+<div class="main-shell">
+<header class="topbar"><span>Workspace <span class="breadcrumb">/ Overview</span></span><div id="profile" class="profile" hidden><span id="profile-avatar" class="avatar"></span><div><strong id="profile-name"></strong><small id="profile-email"></small></div></div></header>
+<main id="overview">
+<section id="sample-panel" class="sample-panel" hidden aria-labelledby="sample-heading"><div><h2 id="sample-heading">Explore a sample workspace</h2><p>Choose an account to preview its dashboard and permitted actions.</p></div><div id="sample-accounts" class="account-buttons"><button type="button" data-account="2">Student</button><button type="button" data-account="1">Instructor</button><button type="button" data-account="3">Administrator</button><button type="button" data-account="4">Student without groups</button></div></section>
+<p id="dashboard-status" class="status-message" role="status" aria-live="polite">Loading your workspace…</p>
+<section id="signed-out" class="signed-out" hidden><p class="eyebrow">A SHARED SPACE FOR BETTER LEARNING</p><h1>Your workspace<br>is waiting<span>.</span></h1><p id="signed-out-description">Sign in to see your groups and role-specific tools.</p><a class="secondary-button" href="/dashboard">Open my dashboard</a></section>
+<div id="dashboard-content" hidden>
+<div class="page-heading"><div><p id="dashboard-eyebrow" class="eyebrow"></p><h1 id="dashboard-title"></h1><p id="dashboard-description" class="muted"></p></div><span id="dashboard-role" class="role-badge"></span></div>
+<section id="dashboard-stats" class="stats" aria-label="Workspace summary"></section>
+<div class="section-heading"><div><p class="eyebrow">LEARN BETTER, TOGETHER</p><h2 id="groups-heading"></h2></div><span id="groups-count" class="count-label"></span></div>
+<section id="study-groups" class="group-grid" aria-label="Study groups"></section>
+<div class="section-heading tools-heading"><div><p class="eyebrow">YOUR NEXT STEP</p><h2 id="tools-heading"></h2></div><span class="count-label">Actions for your role</span></div>
+<section id="tools" class="tools-grid" aria-label="Available tools"></section>
+<div class="refresh-row"><span id="updated-at" class="muted"></span><button id="refresh-dashboard" class="text-button" type="button">Refresh overview ↻</button></div>
+</div>
+<footer>A shared space for better learning.<span>StudySpace / Sprint 1</span></footer>
+</main>
+</div>
+</div>
+</body>
+</html>

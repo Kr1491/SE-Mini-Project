@@ -1,5 +1,7 @@
 # Issue #12 — PR #26 conflict resolution and board flow
 
+Current route note: with dashboard #6, `/` is the dashboard; the existing folder/access workspace is at `/access`, and the material library remains at `/materials`. Earlier commands/results below describe that issue's preparation.
+
 PR #24 (#7 group folders) has merged into main. PR #25 (#6 dashboards) remains separate. Latest `origin/main` has been merged into the local `feat/12-material-access` working tree without creating a commit or pushing. All six conflicted files combine the folder and material features, and the shared schema contains both tables.
 
 ## Current checks

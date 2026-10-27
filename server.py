@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run StudySpace access, folders and materials: python3 server.py --demo (local fixtures only)."""
+"""Run StudySpace dashboards, access, folders and materials: python3 server.py --demo (local fixtures only)."""
 import argparse
 import hashlib
 import json
@@ -16,6 +16,8 @@ from study_platform.db import connect, initialize
 from study_platform.demo import seed, validate_demo
 from study_platform.folders import available_groups, list_folders, create_folder, parse_group_id
 from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_session, current_session, group_access, require_permission
+
+from study_platform.dashboard import build_dashboard, require_dashboard_role
 
 ROOT = Path(__file__).resolve().parent
 
@@ -84,9 +86,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def dispatch(self, method):
         path = urlsplit(self.path).path
-        if method=='GET' and path in ('/','/app.js','/style.css','/folders.js'):
-            filename={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/folders.js':'folders.js'}[path]
-            mime={'/':'text/html; charset=utf-8','/app.js':'text/javascript; charset=utf-8','/style.css':'text/css; charset=utf-8','/folders.js':'text/javascript; charset=utf-8'}[path]
+        dashboard_assets = {
+            '/': ('dashboard.html', 'text/html; charset=utf-8'),
+            '/dashboard': ('dashboard.html', 'text/html; charset=utf-8'),
+            '/dashboard/': ('dashboard.html', 'text/html; charset=utf-8'),
+            '/access': ('index.html', 'text/html; charset=utf-8'),
+            '/dashboard.js': ('dashboard.js', 'text/javascript; charset=utf-8'),
+            '/dashboard.css': ('dashboard.css', 'text/css; charset=utf-8'),
+        }
+        if method == 'GET' and path in dashboard_assets:
+            filename, mime = dashboard_assets[path]
+            return self.send_bytes(200, (ROOT/'static'/filename).read_bytes(), mime)
+        if method=='GET' and path in ('/app.js','/style.css','/folders.js'):
+            filename={'/app.js':'app.js','/style.css':'style.css','/folders.js':'folders.js'}[path]
+            mime={'/app.js':'text/javascript; charset=utf-8','/style.css':'text/css; charset=utf-8','/folders.js':'text/javascript; charset=utf-8'}[path]
             return self.send_bytes(200,(ROOT/'static'/filename).read_bytes(),mime)
         if method=='GET' and path=='/api/health':
             return self.json(200,{'ok':True,'demo':self.server.demo})
@@ -130,6 +143,17 @@ class Handler(BaseHTTPRequestHandler):
             if method=='POST':
                 if not secrets.compare_digest(self.headers.get('X-CSRF-Token','').encode('utf-8'),user['csrf_token'].encode('utf-8')):
                     raise APIError(403,'Invalid request token. Refresh the page and try again.')
+            dashboard_route = re.fullmatch(r'/api/dashboard(?:/([a-z]+))?', path)
+            if method == 'GET' and dashboard_route:
+                if dashboard_route[1]:
+                    require_dashboard_role(user, dashboard_route[1])
+                features = {'folders': callable(globals().get('create_folder')),
+                            'materials': callable(globals().get('open_material'))}
+                return self.json(200, build_dashboard(db, user, features=features))
+            dashboard_page = re.fullmatch(r'/dashboard/([a-z]+)', path)
+            if method == 'GET' and dashboard_page:
+                require_dashboard_role(user, dashboard_page[1])
+                return self.send_bytes(200, (ROOT/'static/dashboard.html').read_bytes(), 'text/html; charset=utf-8')
             safe_user={k:user[k] for k in ('id','name','email','role')}
             if path=='/api/session' and method=='GET':
                 return self.json(200,{'user':safe_user,'csrf_token':user['csrf_token'],'permissions':PERMISSIONS[user['role']]})

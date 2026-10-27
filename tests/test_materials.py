@@ -300,7 +300,7 @@ class MaterialTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/api/groups/1/folders', {'name': 'Denied'})[0], 403)
         self.assertEqual(self.file(action='download')[0], 200)
         self.assertEqual(self.file(self.private)[0], 403)
-        _, page, _ = self.request('GET', '/')
+        _, page, _ = self.request('GET', '/access')
         self.assertIn(b'id="folders-panel"', page)
         self.assertIn(b'href="/materials"', page)
 

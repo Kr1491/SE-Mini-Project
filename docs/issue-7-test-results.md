@@ -1,5 +1,7 @@
 # Issue #7 verification — 25 October 2026
 
+Current route note: with dashboard #6, `/` is the dashboard; the existing folder/access workspace is at `/access`, and the material library remains at `/materials`. Earlier commands/results below describe that issue's preparation.
+
 Executed in the isolated #7 preparation copy based on issue #5 commit `2729193`:
 
 | Check | Result |

@@ -193,10 +193,11 @@ class AccessTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/api/access/check', {'permission': ['wrong type']})[0], 400)
         self.assertEqual(self.request('POST', '/api/demo/session', {'user_id': True})[0], 400)
 
-    def test_folder_and_material_schemas_coexist_while_dashboard_is_separate(self):
+    def test_dashboard_folders_and_material_schemas_coexist(self):
         self.login_sample(3)
-        for path in ['/api/dashboard']:
+        for path in ['/api/unknown-feature']:
             self.assertEqual(self.request('GET', path)[0], 404)
+        self.assertEqual(self.request('GET', '/api/dashboard')[0], 200)
         self.assertEqual(self.request('GET', '/api/groups/1/folders')[0], 200)
         self.assertEqual(self.request('GET', '/api/materials')[0], 200)
         with connect(self.database) as db:
