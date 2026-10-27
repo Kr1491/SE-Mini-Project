@@ -28,6 +28,17 @@ CREATE TABLE IF NOT EXISTS sessions (
     csrf_token TEXT NOT NULL, expires_at INTEGER NOT NULL,
     is_demo INTEGER NOT NULL DEFAULT 0 CHECK(is_demo IN (0,1))
 );
+CREATE TABLE IF NOT EXISTS materials (
+    id INTEGER PRIMARY KEY,
+    group_id INTEGER NOT NULL REFERENCES study_groups(id),
+    uploaded_by INTEGER NOT NULL REFERENCES users(id),
+    filename TEXT NOT NULL,
+    stored_name TEXT NOT NULL UNIQUE,
+    content_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL CHECK(size_bytes > 0),
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS materials_group ON materials(group_id);
 CREATE INDEX IF NOT EXISTS memberships_user ON memberships(user_id);
 CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
 """

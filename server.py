@@ -3,6 +3,10 @@
 import argparse
 import hashlib
 import json
+import os
+import uuid
+from email.parser import BytesParser
+from email.policy import default as email_policy
 import re
 import secrets
 import sys
@@ -15,6 +19,15 @@ from study_platform.demo import seed, validate_demo
 from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_session, current_session, group_access, require_permission
 
 ROOT = Path(__file__).resolve().parent
+
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+ALLOWED_EXTENSIONS = {
+    '.pdf': 'application/pdf',
+    '.txt': 'text/plain',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+}
+
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -163,6 +176,147 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(
                     200 if already_member else 201,
                     {'joined': True, 'already_member': already_member, 'group': dict(group)}
+                )
+
+
+            upload_match = re.fullmatch(r'/api/groups/([1-9][0-9]*)/materials', path)
+
+            if method == 'POST' and upload_match:
+                raw_id = upload_match[1]
+                if len(raw_id) > 19 or int(raw_id) > 9223372036854775807:
+                    raise APIError(400, 'Invalid study group ID.')
+
+                group = group_access(db, user, int(raw_id), manage=True)
+
+                content_type = self.headers.get('Content-Type', '')
+                if not content_type.lower().startswith('multipart/form-data'):
+                    raise APIError(400, 'Upload must use multipart/form-data.')
+
+                raw_length = self.headers.get('Content-Length', '')
+                if not raw_length.isdigit():
+                    raise APIError(400, 'Invalid upload size.')
+                length = int(raw_length)
+                if length > MAX_UPLOAD_BYTES + 65536:
+                    raise APIError(413, 'File too large. Maximum file size is 5 MiB.')
+                if length <= 0:
+                    raise APIError(400, 'The uploaded file is empty.')
+
+                raw_body = self.rfile.read(length)
+                message = BytesParser(policy=email_policy).parsebytes(
+                    ('Content-Type: ' + content_type + '\r\n'
+                     'MIME-Version: 1.0\r\n\r\n').encode('ascii') + raw_body
+                )
+                if not message.is_multipart():
+                    raise APIError(400, 'Invalid multipart upload.')
+
+                files = [
+                    part for part in message.iter_parts()
+                    if part.get_param('name', header='content-disposition') == 'file'
+                    and part.get_content_disposition() == 'form-data'
+                ]
+                if len(files) != 1:
+                    raise APIError(400, 'Provide exactly one file in the file field.')
+
+                part = files[0]
+                filename = part.get_filename()
+                if not isinstance(filename, str) or not filename.strip():
+                    raise APIError(400, 'The file must have a filename.')
+
+                filename = Path(filename.replace('\\', '/')).name.strip()
+                extension = Path(filename).suffix.lower()
+                if not filename or filename in ('.', '..') or extension not in ALLOWED_EXTENSIONS:
+                    raise APIError(415, 'Unsupported file format. Allowed: PDF, TXT, DOCX, PPTX.')
+
+                data = part.get_payload(decode=True) or b''
+                if not data:
+                    raise APIError(400, 'The uploaded file is empty.')
+                if len(data) > MAX_UPLOAD_BYTES:
+                    raise APIError(413, 'File too large. Maximum file size is 5 MiB.')
+
+                expected_type = ALLOWED_EXTENSIONS[extension]
+                if extension == '.pdf' and not data.startswith(b'%PDF-'):
+                    raise APIError(415, 'The file content does not match PDF format.')
+                if extension in ('.docx', '.pptx') and not data.startswith(b'PK'):
+                    raise APIError(415, 'The file content does not match the selected format.')
+                if extension == '.txt':
+                    try:
+                        data.decode('utf-8')
+                    except UnicodeDecodeError:
+                        raise APIError(415, 'The file content is not valid UTF-8 text.')
+                    if b'\x00' in data:
+                        raise APIError(415, 'The file content is not valid text.')
+
+                stored_name = uuid.uuid4().hex + extension
+                upload_dir = Path(getattr(self.server, 'upload_dir', ROOT / 'var' / 'uploads'))
+                upload_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+                if os.name == 'posix':
+                    os.chmod(upload_dir, 0o700)
+                stored_path = upload_dir / stored_name
+
+                descriptor = os.open(
+                    stored_path,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600
+                )
+                try:
+                    with os.fdopen(descriptor, 'wb') as output:
+                        output.write(data)
+                    cursor = db.execute(
+                        'INSERT INTO materials '
+                        '(group_id, uploaded_by, filename, stored_name, content_type, size_bytes, created_at) '
+                        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                        (group['id'], user['id'], filename, stored_name,
+                         expected_type, len(data), int(__import__('time').time()))
+                    )
+                except Exception:
+                    stored_path.unlink(missing_ok=True)
+                    raise
+
+                return self.json(201, {
+                    'material': {
+                        'id': cursor.lastrowid,
+                        'group_id': group['id'],
+                        'filename': filename,
+                        'content_type': expected_type,
+                        'size_bytes': len(data),
+                    }
+                })
+
+            if method == 'GET' and re.fullmatch(r'/api/groups/[1-9][0-9]*/materials', path):
+                raw_id = path.split('/')[3]
+                if len(raw_id) > 19 or int(raw_id) > 9223372036854775807:
+                    raise APIError(400, 'Invalid study group ID.')
+                group = group_access(db, user, int(raw_id))
+                rows = db.execute(
+                    'SELECT id, group_id, uploaded_by, filename, content_type, size_bytes, created_at '
+                    'FROM materials WHERE group_id = ? ORDER BY created_at DESC, id DESC',
+                    (group['id'],)
+                ).fetchall()
+                return self.json(200, {'materials': [dict(row) for row in rows]})
+
+            download_match = re.fullmatch(r'/api/materials/([1-9][0-9]*)/download', path)
+            if method == 'GET' and download_match:
+                raw_id = download_match[1]
+                if len(raw_id) > 19 or int(raw_id) > 9223372036854775807:
+                    raise APIError(400, 'Invalid material ID.')
+                material = db.execute(
+                    'SELECT * FROM materials WHERE id = ?', (int(raw_id),)
+                ).fetchone()
+                if not material:
+                    raise APIError(404, 'Study material not found.')
+
+                group_access(db, user, material['group_id'])
+                upload_dir = Path(getattr(self.server, 'upload_dir', ROOT / 'var' / 'uploads'))
+                stored_path = upload_dir / material['stored_name']
+                try:
+                    content = stored_path.read_bytes()
+                except OSError:
+                    raise APIError(404, 'Stored file is unavailable.')
+
+                safe_filename = material['filename'].replace('"', '').replace('\r', '').replace('\n', '')
+                return self.send_bytes(
+                    200, content, material['content_type'],
+                    {'Content-Disposition': f'attachment; filename="{safe_filename}"'}
                 )
 
             if method == 'POST' and path == '/api/access/check':
