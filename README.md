@@ -1,56 +1,66 @@
-# StudySpace — issue #5: role-based access control
+# StudySpace — role dashboards, group folders and materials
 
-This change implements **issue #5 only**, with the shared Python/SQLite foundation needed to run and test permissions. The generic access-verification page lets you check server-side permissions for students, instructors, and administrators.
+StudySpace opens a role-specific dashboard with database-backed summaries, scoped groups, and navigation for students, instructors, and administrators. #6 incorporates merged role access (#5), folders (#7), and material viewing/downloading (#12), linking the protected workspaces without replacing their authorization checks. Real registration/login, uploads, quizzes, and user-management operations remain their separate modules.
 
-Dashboard implementation (#6), folder creation (#7), and material viewing/downloading (#12) belong to later branches and PRs. Registration/login (#3/#4), group creation (#9), membership management (#10), uploads (#8), and file validation (#11) remain their assigned owners' integration work.
+## Run locally
 
-## Run
-
-Python 3.11+ is required. No additional Python packages or frontend build step are needed.
+Use Python 3.11+ on macOS or Linux. No Python packages or frontend build step are required.
 
 ```bash
 mkdir -p var
 chmod 700 var
-python3 server.py --demo
+python3 server.py --demo --port 8003
 ```
 
-Open **http://127.0.0.1:8000**. Stop with **Ctrl+C**. If port 8000 is occupied, add `--port 8001` and open the matching address.
+Open **http://127.0.0.1:8003/materials**. Open `/` or `/dashboard` for the role-specific dashboard. Its folder action opens `/access#folders-panel`; its material action opens `/materials`. The access-verification console and folder form remain at `/access`. Stop with **Ctrl+C**.
 
-Explicit `--demo` mode seeds sample accounts/groups and enables a local sample-account selector. It is an authorization test fixture, not registration or credential-based login. It is limited to loopback addresses. The demo database defaults to ignored `var/demo-access.db`; normal mode defaults to `var/issue5.db`. A demo database must be empty on first use and contain only unchanged fixtures on reuse. Existing databases with fixture conflicts are rejected, including legacy demo databases without the fixture marker; choose a fresh path rather than overwriting data.
+Explicit `--demo` creates five small sample resources: PDF, PNG, Python source, DOCX, and private-group text. Student and instructor accounts see four; the administrator sees all five; the student without memberships sees none. This is a local fixture selector, not credential login or uploading. Demo accounts/groups must be unchanged fixtures in a dedicated database; fixture conflicts fail without overwriting existing data. Existing #5 demo databases with the correct marker can gain the material fixtures. Files with conflicting names or bytes are never overwritten.
 
-On POSIX systems, a new database is created with permissions `0600` inside a private `0700` directory. Existing database files are tightened to `0600`; existing shared parent directories are refused with instructions to use a private directory. Demo sessions are tagged and rejected in normal mode.
+By default, demo mode uses `var/demo-access.db` and private `var/demo-materials/`; normal mode uses `var/issue5.db` and `var/materials/`. Override with `--database` and `--storage`. Do not point demo mode at real data. Database permissions are `0600`, and database/storage directories must be privately owned `0700` directories. Normal mode disables sample selection and rejects demo tokens; Jiya's credential login integration must issue real sessions as described in [integration.md](docs/integration.md).
 
-Without `--demo`, the sample selector and its endpoint are disabled. Jiya's real login module must verify credentials and issue a session using the helper documented in [integration.md](docs/integration.md).
+## Role dashboards
 
-## Verify #5 in your browser
+Students see their groups and active study partners; instructors see their owned/joined groups and teaching tools; administrators see global active-user/group/membership counts and administration tools. Summaries come from the current database. Direct `/dashboard/{student|instructor|administrator}` pages and corresponding APIs require the exact authenticated role. Account switching clears old private content and ignores stale responses. Dashboard links preserve the authorization checks of the destination feature; they do not implement real login, quizzes, uploads, or account management.
 
-1. Select **Student**: instructor, quiz-creation, and administrator probes must return **403**; sample group 1 is allowed and group 3 denied.
-2. Select **Instructor**: instructor/quiz-authoring probes and management of group 1 are allowed; administrator access and group 3 are denied.
-3. Select **Administrator**: all displayed probes are allowed.
-4. Select **Student without memberships**: access to sample groups 1 and 3 is denied.
-5. Switch accounts and verify permissions change immediately.
+## Group folders
 
-A permission probe only verifies authorization. It does not create a quiz, manage users, create folders, or serve a dashboard.
+Open `/access` to use the group folder picker and creation form alongside the access-verification console. Instructors can create folders in groups they own, administrators in any group, and members can read their permitted groups' folders. Names are trimmed/Unicode-normalized, limited to 1–80 characters, and unique without case differences within a group. Records persist across restarts; validation, duplicate feedback, CSRF protection, and group access checks remain active.
 
-## Automated checks
+## Library behavior
+
+- Filter by an authorized study group, refresh, and page through up to 24 resources at a time.
+- Preview UTF-8 text/code as literal text, PDFs, and supported PNG/JPEG/GIF/WebP images. Large text above 2 MiB uses download instead. PDF display depends on the browser's PDF support; Download remains available.
+- Download original file bytes with a safe original filename. Office documents and unsupported/active formats are download-only. The server derives safe inline types from the extension and byte signature rather than trusting stored MIME metadata.
+- Downloads stream in bounded 64 KiB chunks. Protected single-byte range requests support PDF seeking and partial transfers; unsupported multipart ranges fall back to a full response.
+- Missing, incomplete, unauthorized, or expired-session requests produce clear feedback. Account/group changes clear previews and ignore stale responses.
+
+Material access is **group-scoped**. The #7 folder table and routes are preserved alongside the #12 material schema. Materials currently reference groups; linking uploads to destination folders remains part of the upload integration. Folder association, uploads (#8), and format/size validation before upload (#11) require the documented handoff to Anushree. The generated demo files let this PR be exercised without claiming those modules are complete. The dashboard Materials action now opens `/materials` for students, instructors, and administrators; access remains group-scoped at the API. Unimplemented quiz and user-management tools remain Coming soon.
+
+## Checks
 
 ```bash
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q server.py study_platform tests
 node --check static/app.js
-node --test tests/test_frontend.cjs
+node --check static/dashboard.js
+node --check static/folders.js
+node --check static/materials.js
+node --test tests/*.cjs
 ```
 
-The test suite uses real HTTP parsing/dispatch, SQLite, and in-memory connections. It does not need a listening port. Node.js is needed only for the JavaScript syntax check, not to run the application.
+Node.js is required only for frontend tests and syntax checks. The Python suite dispatches actual HTTP handlers over in-memory connections with temporary SQLite databases; it needs no listening port. Frontend tests execute the actual JavaScript with a simulated DOM and fetch responses.
 
-All **35 Python tests and five frontend tests pass** in the review-fix copy. Python tests were executed on 3.12 and 3.14 locally; CI is configured to test the declared 3.11 floor alongside 3.12, and its remote result is pending your push. A live server/browser check is pending because this execution environment blocks socket binding. GitHub Actions includes the same checks; its remote result is pending your push.
+Local results: **92 Python tests** pass on Python 3.12 and 3.14; **41 JavaScript tests** pass. CI retains pinned actions and Python 3.11/3.12 coverage. Live HTTP integration checks pass on a loopback server. Interactive browser verification and remote CI remain pending your run/push.
 
-## Review and next steps
+## Issue documents
 
-- [PR #23 review findings and responses](docs/pr23-review-fixes.md).
-- [Issue #5 PR description](docs/issue-5-pr.md).
-- [Test results](docs/issue-5-test-results.md).
-- [Commands and board status guide](docs/issue-5-workflow.md).
-- [Authentication and authorization integration contract](docs/integration.md).
+- [Dashboard PR description — closes #6 only](docs/issue-6-pr.md)
+- [Dashboard checks and conflict resolution](docs/issue-6-test-results.md)
+- [Finish updating existing PR #25](docs/issue-6-workflow.md)
 
-Open a PR with base `main` and compare `feat/5-role-access`, linking only **Closes #5**. After review, merge, and verification, start #6 on a fresh branch from updated `main`.
+- [Manual checks and test evidence](docs/issue-12-test-results.md)
+- [Step-by-step branch, commit, PR, and board guide](docs/issue-12-workflow.md)
+- [PR description — closes #12 only](docs/issue-12-pr.md)
+- [Shared authentication, authorization, and upload integration contract](docs/integration.md)
+- [Merged #7 folder behavior and checks](docs/issue-7-test-results.md)
+- [Earlier #5 review fixes](docs/pr23-review-fixes.md)
