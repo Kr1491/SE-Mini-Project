@@ -135,3 +135,38 @@ def register_user(db, data):
         "email": account["email"],
         "role": account["role"],
     }
+
+def login_user(db, email, password):
+    """Verify login credentials and return safe user details."""
+    if not isinstance(email, str) or not isinstance(password, str):
+        raise AuthError(400, "Email and password are required.")
+
+    email = email.strip().lower()
+
+    if not email or not password:
+        raise AuthError(400, "Email and password are required.")
+
+    user = db.execute(
+        """
+        SELECT id, name, email, role, password_hash, is_active
+        FROM users
+        WHERE email = ?
+        """,
+        (email,),
+    ).fetchone()
+
+    # Use a generic error so we don't reveal whether an email exists.
+    if (
+        not user
+        or not user["is_active"]
+        or not user["password_hash"]
+        or not verify_password(password, user["password_hash"])
+    ):
+        raise AuthError(401, "Invalid email or password.")
+
+    return {
+        "id": user["id"],
+        "name": user["name"],
+        "email": user["email"],
+        "role": user["role"],
+    }
