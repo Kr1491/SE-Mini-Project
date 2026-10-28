@@ -270,6 +270,146 @@ class AccessTests(unittest.TestCase):
             self.login_sample(1)
         self.assertEqual(observed, [True])
 
+    
+    def test_login_with_valid_credentials(self):
+        from study_platform.auth import register_user
+
+        credentials = {
+            "name": "Login Test Student",
+            "email": "login-test@example.com",
+            "password": "StrongPassword123!",
+            "role": "student",
+        }
+
+        with connect(self.database) as db:
+            register_user(db, credentials)
+
+        status, body, headers = self.request(
+            "POST",
+            "/api/login",
+            {
+                "email": credentials["email"],
+                "password": credentials["password"],
+            },
+            csrf=False,
+            headers={"Cookie": ""},
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["user"]["email"], credentials["email"])
+        self.assertNotIn("password_hash", body["user"])
+        self.assertIn("csrf_token", body)
+        self.assertIn("study_session=", headers["Set-Cookie"])
+        self.assertIn("HttpOnly", headers["Set-Cookie"])
+
+    def test_login_rejects_wrong_password(self):
+        from study_platform.auth import register_user
+
+        credentials = {
+            "name": "Login Test Student",
+            "email": "login-test@example.com",
+            "password": "StrongPassword123!",
+            "role": "student",
+        }
+
+        with connect(self.database) as db:
+            register_user(db, credentials)
+
+        status, _, _ = self.request(
+            "POST",
+            "/api/login",
+            {
+                "email": credentials["email"],
+                "password": "WrongPassword123!",
+            },
+            csrf=False,
+            headers={"Cookie": ""},
+        )
+
+        self.assertEqual(status, 401)
+
+    def test_logout_invalidates_session(self):
+        from study_platform.auth import register_user
+
+        credentials = {
+            "name": "Logout Test Student",
+            "email": "logout-test@example.com",
+            "password": "StrongPassword123!",
+            "role": "student",
+        }
+
+        with connect(self.database) as db:
+            register_user(db, credentials)
+
+        status, body, headers = self.request(
+            "POST",
+            "/api/login",
+            {
+                "email": credentials["email"],
+                "password": credentials["password"],
+            },
+            csrf=False,
+            headers={"Cookie": ""},
+        )
+        self.assertEqual(status, 200)
+
+        self.cookie = headers["Set-Cookie"].split(";")[0]
+        self.csrf = body["csrf_token"]
+
+        logout_status, _, logout_headers = self.request(
+            "POST", "/api/logout"
+        )
+
+        self.assertEqual(logout_status, 200)
+        self.assertIn("Max-Age=0", logout_headers["Set-Cookie"])
+
+        session_status, _, _ = self.request("GET", "/api/session")
+        self.assertEqual(session_status, 401)
+
+    
+    def test_logout_rejects_missing_csrf_token(self):
+        from study_platform.auth import register_user
+
+        credentials = {
+            "name": "CSRF Test Student",
+            "email": "csrf-test@example.com",
+            "password": "StrongPassword123!",
+            "role": "student",
+        }
+
+        with connect(self.database) as db:
+            register_user(db, credentials)
+
+        status, body, headers = self.request(
+            "POST",
+            "/api/login",
+            {
+                "email": credentials["email"],
+                "password": credentials["password"],
+            },
+            csrf=False,
+            headers={"Cookie": ""},
+        )
+
+        self.assertEqual(status, 200)
+        self.cookie = headers["Set-Cookie"].split(";")[0]
+        self.csrf = body["csrf_token"]
+
+        # Send the logout request without its CSRF header.
+        status, _, _ = self.request(
+            "POST",
+            "/api/logout",
+            csrf=False,
+        )
+
+        self.assertEqual(status, 403)
+
+        # The session should still be valid because logout was rejected.
+        session_status, _, _ = self.request("GET", "/api/session")
+        self.assertEqual(session_status, 200)
+
+
+
 
 if __name__ == '__main__':
     unittest.main()
