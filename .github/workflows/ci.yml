@@ -24,6 +24,7 @@ jobs:
         run: node --test tests/*.cjs
       - name: Check browser JavaScript syntax
         run: |
+          node --check static/login.js
           node --check static/app.js
           node --check static/dashboard.js
           node --check static/folders.js

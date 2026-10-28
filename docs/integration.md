@@ -131,3 +131,12 @@ The root `/` and `/dashboard` serve the new dashboard shell. The existing access
 The dashboard reads existing users/groups/memberships without a schema migration. `build_dashboard(..., features={'folders': ..., 'materials': ...})` receives server-derived capability information; the folder action is available only when the server has the #7 creation implementation loaded. It opens `/access#folders-panel`, where the existing group picker and authorization apply. The Materials action is available to each supported role when its material-serving capability is present and the role has `materials.read`; it opens `/materials`. The frontend allowlist permits that exact path. Both destinations retain their own session, role and group checks; dashboard visibility does not grant resource access.
 
 Jiya's future authentication UI should navigate to `/dashboard` after verified login/session creation. New group/membership records are reflected on refresh. Other feature owners should enable their tool metadata only after their protected routes exist. Preserve server-side role/group checks in every feature; dashboard visibility alone is not authorization.
+
+
+## Basic login integration
+
+`/login` now posts existing-account credentials to `POST /api/login`, using `auth.login_user` and the registration module's PBKDF2 format. Login verifies the active account, rechecks password/status state before issuing the session, revokes the browser's previous token, and commits before Set-Cookie. `POST /api/logout` uses the existing CSRF middleware, deletes the current session and expires the cookie before returning to `/login`. Add `--secure-cookies` for an HTTPS deployment.
+
+Demo mode keeps the existing validated sample-account endpoint; it never converts a sample selection into a real credential login. The login page exposes sample controls only when `/api/health` declares demo mode. Normal mode has no default password. Registration UI should use the existing registration helper and the same real database, then link to `/login`. See [login.md](login.md).
+
+The duplicate upload material schema has been reconciled with the viewer schema. Upload metadata now supplies `title`/`original_name`; the group listing aliases original_name as filename to keep its API compatible. Legacy filename-only records migrate transactionally. Uploads and protected retrieval use the same storage; existing legacy upload directories can be selected explicitly with `--storage`. No old file bytes are moved or overwritten automatically.

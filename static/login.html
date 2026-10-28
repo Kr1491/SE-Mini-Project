@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StudySpace · Sign in</title>
+<link rel="stylesheet" href="/login.css"><script src="/login.js" defer></script>
+</head>
+<body>
+<header><a class="brand" href="/dashboard"><span class="brand-mark">S</span>StudySpace<span class="brand-dot">.</span></a><a class="header-link" href="/dashboard">Explore your workspace ↗</a></header>
+<main class="login-layout">
+<section class="welcome" aria-labelledby="welcome-heading"><p class="eyebrow">BETTER TOGETHER</p><h1 id="welcome-heading">A little learning.<br>A lot of possibility<span>.</span></h1><p class="welcome-copy">Your notes, your study groups, your next great idea. Bring them all into one shared space.</p><div class="study-card"><div class="card-top"><span class="subject-icon" aria-hidden="true">▱</span><span class="card-label">YOUR NEXT STUDY SESSION</span><span class="live-dot" aria-hidden="true"></span></div><h2>Good ideas belong<br>in good company.</h2><div class="resource-stack" aria-hidden="true"><span>Shared notes</span><span>Study groups</span><span>A little progress</span></div><div class="card-bottom"><div class="avatars" aria-hidden="true"><span>J</span><span>A</span><span>K</span></div><span>Learn. Share. Grow.</span></div></div><p class="welcome-footnote">ONE PLACE TO COME TOGETHER AND KEEP GOING.</p></section>
+<section class="login-panel" aria-labelledby="login-heading"><p class="eyebrow">WELCOME BACK</p><h2 id="login-heading">Make yourself at home<span>.</span></h2><p class="form-intro">Sign in to pick up where you left off.</p>
+<form id="login-form"><fieldset id="login-fields" disabled><legend class="visually-hidden">Account credentials</legend><label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="username" placeholder="you@example.com" maxlength="254" required><div class="password-label"><label for="password">Password</label></div><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" maxlength="128" required><button id="toggle-password" type="button" aria-controls="password" aria-pressed="false">Show</button></div><button id="sign-in" class="primary-button" type="submit">Sign in <span aria-hidden="true">↗</span></button></fieldset></form>
+<p id="login-status" class="message" role="status" aria-live="polite">Connecting to your workspace…</p>
+<p class="account-help">Need an account? Contact your project administrator.</p>
+<section id="demo-panel" class="demo-panel" hidden aria-labelledby="demo-heading"><div class="demo-heading"><h3 id="demo-heading">Try a sample workspace</h3><span class="demo-badge">LOCAL DEMO</span></div><p>Sample accounts use no password. Choose a role to explore.</p><div id="demo-accounts" class="demo-accounts"><button type="button" data-account="2">Student</button><button type="button" data-account="1">Instructor</button><button type="button" data-account="3">Administrator</button><button type="button" data-account="4">Student without groups</button></div></section>
+<p class="privacy-note"><span aria-hidden="true">✓</span> Your workspace. The right access for every role.</p>
+</section>
+</main>
+<footer><span>A shared space for better learning.</span><span>StudySpace</span></footer>
+</body>
+</html>
