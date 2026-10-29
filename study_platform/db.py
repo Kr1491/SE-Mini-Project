@@ -29,7 +29,9 @@ CREATE TABLE IF NOT EXISTS users (
     is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1))
 );
 CREATE TABLE IF NOT EXISTS study_groups (
-    id INTEGER PRIMARY KEY, name TEXT NOT NULL,
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
     created_by INTEGER NOT NULL REFERENCES users(id)
 );
 CREATE TABLE IF NOT EXISTS memberships (
@@ -113,12 +115,26 @@ def _migrate_upload_materials(db):
     db.execute('ALTER TABLE materials_migrated RENAME TO materials')
     db.execute('CREATE INDEX materials_group ON materials(group_id)')
 
+def _migrate_study_group_description(db):
+    """Add descriptions to existing study groups without losing data."""
+    columns = {
+        row['name']
+        for row in db.execute('PRAGMA table_info(study_groups)')
+    }
+
+    if 'description' not in columns:
+        db.execute(
+            "ALTER TABLE study_groups "
+            "ADD COLUMN description TEXT NOT NULL DEFAULT ''"
+        )
+
 
 def initialize(path):
     _secure_database(path)
     with connect(path) as db:
         db.executescript(SCHEMA)
         _migrate_upload_materials(db)
+        _migrate_study_group_description(db)
         columns = {row['name']: row for row in db.execute('PRAGMA table_info(sessions)')}
         if 'is_demo' not in columns or not columns['token_hash']['notnull']:
             db.execute("""CREATE TABLE sessions_migrated (

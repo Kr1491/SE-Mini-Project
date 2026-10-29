@@ -20,6 +20,39 @@
 <section id="dashboard-stats" class="stats" aria-label="Workspace summary"></section>
 <div class="section-heading"><div><p class="eyebrow">LEARN BETTER, TOGETHER</p><h2 id="groups-heading"></h2></div><span id="groups-count" class="count-label"></span></div>
 <section id="study-groups" class="group-grid" aria-label="Study groups"></section>
+
+<section id="create-group-panel" class="create-group-panel" hidden>
+  <h2>Create a study group</h2>
+  <p class="muted">Set up a space for collaborative learning.</p>
+
+  <form id="create-group-form">
+    <label for="group-name">Group name</label>
+    <input
+      id="group-name"
+      name="name"
+      type="text"
+      maxlength="100"
+      required
+      placeholder="e.g. Machine Learning"
+    >
+
+    <label for="group-description">Description</label>
+    <textarea
+      id="group-description"
+      name="description"
+      maxlength="1000"
+      rows="3"
+      placeholder="What will this group focus on?"
+    ></textarea>
+
+    <button type="submit" id="create-group-button" class="secondary-button">
+      Create group
+    </button>
+
+    <p id="create-group-status" role="status" aria-live="polite"></p>
+  </form>
+</section>
+
 <div class="section-heading tools-heading"><div><p class="eyebrow">YOUR NEXT STEP</p><h2 id="tools-heading"></h2></div><span class="count-label">Actions for your role</span></div>
 <section id="tools" class="tools-grid" aria-label="Available tools"></section>
 <div class="refresh-row"><span id="updated-at" class="muted"></span><button id="refresh-dashboard" class="text-button" type="button">Refresh overview ↻</button></div>
