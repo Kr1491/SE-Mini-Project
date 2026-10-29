@@ -234,26 +234,46 @@ class AccessTests(unittest.TestCase):
                 self.assertIn('group ID', body['error'])
         self.assertEqual(self.request('GET', '/api/access/groups/999')[0], 404)
 
+
     def test_legacy_session_migration_discards_unclassified_tokens(self):
         legacy = Path(self.temp.name) / 'legacy.db'
-        with sqlite3.connect(legacy) as db:
+
+        db = sqlite3.connect(legacy)
+        try:
             db.executescript("""
                 CREATE TABLE sessions (
                     token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL,
                     csrf_token TEXT NOT NULL, expires_at INTEGER NOT NULL
                 );
             """)
-            db.execute('INSERT INTO sessions VALUES(?,?,?,?)',
-                       ('unknown-old-token', 1, 'old-csrf', int(time.time()) + 3600))
+            db.execute(
+                'INSERT INTO sessions VALUES(?,?,?,?)',
+                ('unknown-old-token', 1, 'old-csrf', int(time.time()) + 3600)
+            )
+            db.commit()
+        finally:
+            db.close()
+
         initialize(legacy)
+
         with connect(legacy) as db:
-            self.assertIn('is_demo', {row['name'] for row in db.execute('PRAGMA table_info(sessions)')})
-            self.assertEqual(db.execute('SELECT count(*) FROM sessions').fetchone()[0], 0)
+            self.assertIn(
+                'is_demo',
+                {row['name'] for row in db.execute('PRAGMA table_info(sessions)')}
+            )
+            self.assertEqual(
+                db.execute('SELECT count(*) FROM sessions').fetchone()[0], 0
+            )
             seed(db)
-            token, _ = create_session(db, 1)
+            create_session(db, 1)
+
         initialize(legacy)
+
         with connect(legacy) as db:
-            self.assertEqual(db.execute('SELECT count(*) FROM sessions').fetchone()[0], 1)
+            self.assertEqual(
+                db.execute('SELECT count(*) FROM sessions').fetchone()[0], 1
+            )
+
 
     def test_sample_token_is_committed_before_response_is_sent(self):
         original_json = Handler.json
@@ -312,6 +332,95 @@ class AccessTests(unittest.TestCase):
         status, body, _ = self.request('POST', '/api/groups/1/join', {})
         self.assertEqual(status, 201)
         self.assertEqual(self.request('GET', '/api/access/groups/1')[0], 200)
+
+    def test_instructor_can_create_study_group(self):
+        self.login_sample(1)
+
+        status, body, _ = self.request(
+            'POST',
+            '/api/groups',
+            {
+                'name': 'Machine Learning',
+                'description': 'Collaborative ML study sessions'
+            }
+        )
+
+        self.assertEqual(status, 201)
+        group_id = body['group']['id']
+        self.assertEqual(body['group']['name'], 'Machine Learning')
+        self.assertEqual(
+            body['group']['description'],
+            'Collaborative ML study sessions'
+        )
+        self.assertEqual(body['group']['created_by'], 1)
+
+        with connect(self.database) as db:
+            group = db.execute(
+                'SELECT name, description, created_by '
+                'FROM study_groups WHERE id = ?',
+                (body['group']['id'],)
+            ).fetchone()
+
+        self.assertIsNotNone(group)
+        self.assertEqual(group['name'], 'Machine Learning')
+        self.assertEqual(
+            group['description'],
+            'Collaborative ML study sessions'
+        )
+        self.assertEqual(group['created_by'], 1)
+
+        status, list_body, _ = self.request('GET', '/api/groups')
+        self.assertEqual(status, 200)
+        self.assertIn(
+            group_id,
+            [group['id'] for group in list_body['groups']]
+        )
+
+    def test_group_creation_requires_a_name(self):
+        self.login_sample(1)
+
+        for name in ['', '   ', None, 123]:
+            with self.subTest(name=name):
+                status, _, _ = self.request(
+                    'POST',
+                    '/api/groups',
+                    {'name': name}
+                )
+                self.assertEqual(status, 400)
+
+    def test_students_cannot_create_study_groups(self):
+        self.login_sample(2)
+
+        status, _, _ = self.request(
+            'POST',
+            '/api/groups',
+            {'name': 'Unauthorized Group'}
+        )
+
+        self.assertEqual(status, 403)
+
+    def test_administrators_cannot_create_study_groups(self):
+        self.login_sample(3)
+
+        status, _, _ = self.request(
+            'POST',
+            '/api/groups',
+            {'name': 'Unauthorized Group'}
+        )
+
+        self.assertEqual(status, 403)
+
+    def test_group_creation_requires_valid_csrf_token(self):
+        self.login_sample(1)
+
+        status, _, _ = self.request(
+            'POST',
+            '/api/groups',
+            {'name': 'CSRF Test Group'},
+            csrf=False
+        )
+
+        self.assertEqual(status, 403)
 
 if __name__ == '__main__':
     unittest.main()

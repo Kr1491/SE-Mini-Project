@@ -66,6 +66,8 @@
       card.append(node('span', 'stat-icon', ['▦', '↗', '✓'][index] || '·'), content);
       byId('dashboard-stats').append(card);
     }
+    const createGroupPanel = byId('create-group-panel');
+    createGroupPanel.hidden = data.role !== 'instructor';
     byId('groups-heading').textContent = data.group_heading;
     byId('groups-count').textContent = `${data.groups.length} ${data.groups.length === 1 ? 'group' : 'groups'}`;
     for (const group of data.groups) {
@@ -153,6 +155,55 @@
     byId('refresh-dashboard').disabled = true;
     await load(token);
     if (token === revision) byId('refresh-dashboard').disabled = false;
+  });
+  byId('create-group-form').addEventListener('submit', async event => {
+    event.preventDefault();
+
+    if (!currentSession || currentSession.user.role !== 'instructor') {
+      return;
+    }
+
+    const form = event.currentTarget;
+    const button = byId('create-group-button');
+    const message = byId('create-group-status');
+    const name = byId('group-name').value.trim();
+    const description = byId('group-description').value.trim();
+
+    message.textContent = '';
+    message.classList.remove('error');
+
+    if (!name) {
+      message.textContent = 'Please enter a group name.';
+      message.classList.add('error');
+      return;
+    }
+
+    button.disabled = true;
+
+    try {
+      await request('/api/groups', {
+        method: 'POST',
+        body: JSON.stringify({name, description})
+      });
+
+
+      form.reset();
+
+      const token = ++revision;
+      const loaded = await load(token);
+
+      if (loaded && token === revision) {
+        const message = byId('create-group-status');
+        message.textContent = 'Study group created successfully.';
+        message.classList.remove('error');
+      }
+
+    } catch (error) {
+      message.textContent = error.message;
+      message.classList.add('error');
+    } finally {
+      button.disabled = false;
+    }
   });
   (async () => {
     try {

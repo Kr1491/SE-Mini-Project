@@ -221,8 +221,55 @@ class Handler(BaseHTTPRequestHandler):
             safe_user={k:user[k] for k in ('id','name','email','role')}
             if path=='/api/session' and method=='GET':
                 return self.json(200,{'user':safe_user,'csrf_token':user['csrf_token'],'permissions':PERMISSIONS[user['role']]})
-            if path == '/api/groups' and method == 'GET':
-                return self.json(200, {'groups': available_groups(db, user)})
+
+            if path == '/api/groups':
+                if method == 'GET':
+                    return self.json(200, {'groups': available_groups(db, user)})
+
+                if method == 'POST':
+                    if user['role'] != 'instructor':
+                        raise APIError(
+                            403,
+                            'Only instructors can create study groups.'
+                        )
+
+                    data = self.body()
+                    name = data.get('name')
+                    description = data.get('description', '')
+
+                    if not isinstance(name, str) or not name.strip():
+                        raise APIError(400, 'A group name is required.')
+
+                    if len(name.strip()) > 100:
+                        raise APIError(400, 'Group name must be 100 characters or fewer.')
+
+                    if not isinstance(description, str):
+                        raise APIError(400, 'Description must be text.')
+
+                    if len(description) > 1000:
+                        raise APIError(400, 'Description must be 1000 characters or fewer.')
+
+                    name = name.strip()
+                    description = description.strip()
+
+                    cursor = db.execute(
+                        '''INSERT INTO study_groups (name, description, created_by)
+                        VALUES (?, ?, ?)''',
+                        (name, description, user['id'])
+                    )
+                    group_id = cursor.lastrowid
+
+                    db.commit()
+
+                    return self.json(201, {
+                        'group': {
+                            'id': group_id,
+                            'name': name,
+                            'description': description,
+                            'created_by': user['id']
+                        }
+                    })
+
             folder_route = re.fullmatch(r'/api/groups/([1-9][0-9]*)/folders', path)
             if folder_route:
                 group_id = parse_group_id(folder_route[1])
