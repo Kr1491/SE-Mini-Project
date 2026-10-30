@@ -2,7 +2,7 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>StudySpace · Material library</title><link rel="stylesheet" href="/materials.css"><script src="/materials.js" defer></script></head>
 <body>
-<div id="demo-banner" class="demo-banner" hidden>LOCAL DEMO <span>Sample accounts and files. Uploading new material is a separate feature.</span></div>
+<div id="demo-banner" class="demo-banner" hidden>LOCAL DEMO <span>Sample accounts and files. Upload resources to your study group folders.</span></div>
 <header><a class="brand" href="/"><span class="brand-mark">S</span>StudySpace<span class="brand-dot">.</span></a><div class="header-links"><a href="/">Workspace ↗</a><span id="profile-name"></span></div></header>
 <main>
 <section class="page-heading"><div><p class="eyebrow">GOOD IDEAS ARE BETTER SHARED</p><h1>Your material library<span>.</span></h1><p class="intro">Find course resources, take a closer look, and keep a copy for your next study session.</p></div><span id="role-badge" class="role-badge" hidden></span></section>
@@ -10,6 +10,16 @@
 <p id="library-status" class="message" role="status" aria-live="polite">Loading your library…</p>
 <section id="library" hidden aria-label="Study materials">
 <div class="toolbar"><div><label for="material-group">Study group</label><select id="material-group"><option value="">All permitted groups</option></select></div><button id="refresh-library" class="secondary-button" type="button">Refresh ↻</button></div>
+<section id="upload-panel" class="upload-panel" hidden aria-label="Upload study material">
+<div><p class="eyebrow">CONTRIBUTE TO YOUR GROUP</p><h2>Upload study material</h2></div>
+<form id="upload-form">
+<label for="upload-group">Study group</label><select id="upload-group" required></select>
+<label for="upload-folder">Destination folder</label><select id="upload-folder" required></select>
+<label for="upload-file">Choose a file</label><input id="upload-file" type="file" required accept=".pdf,.txt,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp,.md,.py,.js,.java,.c,.cpp,.h,.css,.json,.csv,.xml,.sql">
+<button id="upload-submit" class="primary-button" type="submit">Upload material ↑</button>
+<p id="upload-status" class="message" role="status" aria-live="polite"></p>
+</form>
+</section>
 <div class="section-heading"><div><p class="eyebrow">A LITTLE KNOWLEDGE, WITHIN REACH</p><h2>Shared resources</h2></div><span id="material-count" class="count-label"></span></div>
 <div id="material-list" class="material-list"></div>
 <div class="pagination"><button id="previous-page" class="secondary-button" type="button" disabled>← Previous</button><span id="page-info" class="count-label"></span><button id="next-page" class="secondary-button" type="button" disabled>Next →</button></div>

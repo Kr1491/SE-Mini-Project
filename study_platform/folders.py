@@ -40,12 +40,25 @@ def create_folder(db, user, group_id, raw_name):
     if not db.in_transaction:
         db.execute('BEGIN IMMEDIATE')
     group_access(db, user, group_id, manage=True)
+    # Hold the write transaction across authorization and creation so group or
+    # membership changes cannot race the authorized write.
+    if not db.in_transaction:
+        db.execute('BEGIN IMMEDIATE')
+
+    group_access(db, user, group_id, manage=True)
+
     try:
-        cursor = db.execute('''INSERT INTO folders(group_id,name,name_key,created_by)
-            VALUES(?,?,?,?)''', (group_id, name, name.casefold(), user['id']))
+        cursor = db.execute(
+            '''INSERT INTO folders(group_id,name,name_key,created_by)
+               VALUES(?,?,?,?)''',
+            (group_id, name, name.casefold(), user['id'])
+        )
     except sqlite3.IntegrityError as exc:
-        if exc.sqlite_errorcode == sqlite3.SQLITE_CONSTRAINT_UNIQUE:
-            raise APIError(409, 'A folder with this name already exists in this group.') from exc
+        if 'UNIQUE constraint failed: folders.group_id, folders.name_key' in str(exc):
+            raise APIError(
+                409,
+                'A folder with this name already exists in this group.'
+            ) from exc
         raise
     return dict(db.execute('''SELECT id,group_id,name,created_by,created_at
         FROM folders WHERE id=?''', (cursor.lastrowid,)).fetchone())

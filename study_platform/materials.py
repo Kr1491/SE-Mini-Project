@@ -59,8 +59,9 @@ def catalog(db, user, *, group_id=None, limit=24, offset=0):
     clause = f'({SCOPE})' + (' AND m.group_id=?' if group_id is not None else '')
     values = (*parameters, group_id) if group_id is not None else parameters
     total = db.execute(f'SELECT count(*) FROM materials m JOIN study_groups g ON g.id=m.group_id WHERE {clause}', values).fetchone()[0]
-    rows = db.execute(f'''SELECT m.id,m.group_id,g.name AS group_name,m.title,m.original_name,
+    rows = db.execute(f'''SELECT m.id,m.group_id,m.folder_id,f.name AS folder_name,g.name AS group_name,m.title,m.original_name,
         m.size_bytes,m.created_at FROM materials m JOIN study_groups g ON g.id=m.group_id
+        LEFT JOIN folders f ON f.id=m.folder_id
         WHERE {clause} ORDER BY m.created_at DESC,m.id DESC LIMIT ? OFFSET ?''', (*values, limit, offset))
     items = []
     for row in rows:
