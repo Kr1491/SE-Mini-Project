@@ -23,6 +23,7 @@ from study_platform.folders import available_groups, list_folders, create_folder
 from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_session, current_session, group_access, require_permission
 
 from study_platform.dashboard import build_dashboard, require_dashboard_role
+from study_platform.admin_users import require_administrator, list_users, update_user_access, query_options as admin_query_options, integer as admin_integer
 
 ROOT = Path(__file__).resolve().parent
 
@@ -147,6 +148,8 @@ class Handler(BaseHTTPRequestHandler):
             '/login/': ('login.html', 'text/html; charset=utf-8'),
             '/login.js': ('login.js', 'text/javascript; charset=utf-8'),
             '/login.css': ('login.css', 'text/css; charset=utf-8'),
+            '/admin-users.js': ('admin-users.js', 'text/javascript; charset=utf-8'),
+            '/admin-users.css': ('admin-users.css', 'text/css; charset=utf-8'),
         }
         if method == 'GET' and path in dashboard_assets:
             filename, mime = dashboard_assets[path]
@@ -213,12 +216,28 @@ class Handler(BaseHTTPRequestHandler):
                 db.commit()
                 return self.json(200, {'message': 'Signed out.'},
                                  {'Set-Cookie': self.session_cookie(expire=True)})
+            if method == 'GET' and path in ('/admin/users', '/admin/users/'):
+                require_administrator(db, user)
+                return self.send_bytes(200, (ROOT/'static/admin-users.html').read_bytes(), 'text/html; charset=utf-8')
+            if method == 'GET' and path == '/api/admin/users':
+                require_administrator(db, user)
+                return self.json(200, list_users(db, user, read_only=self.server.demo,
+                    **admin_query_options(urlsplit(self.path).query)))
+            admin_user_route = re.fullmatch(r'/api/admin/users/([1-9][0-9]*)', path)
+            if method == 'POST' and admin_user_route:
+                require_administrator(db, user)
+                if self.server.demo:
+                    raise APIError(409, 'Sample accounts are read-only. Use a local test account to edit roles and access.')
+                result = update_user_access(db, user, admin_integer(admin_user_route[1], minimum=1), self.body())
+                db.commit()
+                return self.json(200, result)
             dashboard_route = re.fullmatch(r'/api/dashboard(?:/([a-z]+))?', path)
             if method == 'GET' and dashboard_route:
                 if dashboard_route[1]:
                     require_dashboard_role(user, dashboard_route[1])
                 features = {'folders': callable(globals().get('create_folder')),
-                            'materials': callable(globals().get('open_material'))}
+                            'materials': callable(globals().get('open_material')),
+                            'user_management': True}
                 return self.json(200, build_dashboard(db, user, features=features))
             dashboard_page = re.fullmatch(r'/dashboard/([a-z]+)', path)
             if method == 'GET' and dashboard_page:

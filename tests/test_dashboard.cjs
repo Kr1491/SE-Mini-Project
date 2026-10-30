@@ -219,3 +219,15 @@ test('sign out uses the session CSRF token, clears private content and opens log
   assert.equal(ui.get('dashboard-content').hidden,true);
   assert.deepEqual(ui.navigations,['/login']);
 });
+
+test('administrator management link uses the exact allowed local path', async () => {
+  const ui = harness(mockWorkspace(3, true, data => {
+    data.actions.push({label:'Users',description:'Account access',available:true,href:'/admin/users'});
+    data.actions.push({label:'Unsafe lookalike',description:'Do not link',available:true,href:'/admin/users-external'});
+    return data;
+  }));
+  await flush();
+  const links = descendants(ui.get('tools')).filter(node=>node.tagName==='a').map(node=>node.href);
+  assert.ok(links.includes('/admin/users'));
+  assert.equal(links.includes('/admin/users-external'),false);
+});

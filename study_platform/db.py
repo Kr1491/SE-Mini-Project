@@ -4,6 +4,7 @@ import os
 import stat
 from contextlib import contextmanager
 from pathlib import Path
+from .admin_users import AUDIT_SCHEMA
 
 MATERIALS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS materials (
@@ -27,7 +28,8 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT NOT NULL UNIQUE COLLATE NOCASE,
     password_hash TEXT,
     role TEXT NOT NULL CHECK(role IN ('student','instructor','administrator')),
-    is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1))
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+    access_version INTEGER NOT NULL DEFAULT 0 CHECK(access_version>=0)
 );
 CREATE TABLE IF NOT EXISTS study_groups (
     id INTEGER PRIMARY KEY,
@@ -146,7 +148,10 @@ def _migrate_material_folders(db):
 def initialize(path):
     _secure_database(path)
     with connect(path) as db:
-        db.executescript(SCHEMA)
+        db.executescript(SCHEMA + AUDIT_SCHEMA)
+        user_columns = {row['name'] for row in db.execute('PRAGMA table_info(users)')}
+        if 'access_version' not in user_columns:
+            db.execute('ALTER TABLE users ADD COLUMN access_version INTEGER NOT NULL DEFAULT 0 CHECK(access_version>=0)')
         _migrate_upload_materials(db)
         _migrate_material_folders(db)
         _migrate_study_group_description(db)

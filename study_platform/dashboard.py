@@ -79,6 +79,9 @@ def build_dashboard(db, user, *, features=None):
             'administrator': ['user_management']}[role]
     actions = [group_action, folder_action, material_action]
     actions.extend({'key': key, 'label': upcoming[key][0], 'description': upcoming[key][1], 'available': False, 'href': None} for key in keys)
+    if role == 'administrator' and (features or {}).get('user_management'):
+        action = next(item for item in actions if item['key'] == 'user_management')
+        action.update(available=True, href='/admin/users')
     if role == 'administrator':
         actions.append({'key': 'access_checks', 'label': 'Access checks', 'description': 'Verify role and group access for this account.', 'available': True, 'href': '/access'})
     return {

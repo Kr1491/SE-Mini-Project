@@ -139,8 +139,8 @@ class DashboardTests(unittest.TestCase):
                 if not action['available']:
                     self.assertIsNone(action['href'])
                 else:
-                    self.assertIn(action['href'], ['#study-groups', '/access', '/access#folders-panel', '/materials'])
-            for key in ['quiz_attempts', 'results', 'quiz_creation', 'performance', 'user_management']:
+                    self.assertIn(action['href'], ['#study-groups', '/access', '/access#folders-panel', '/materials', '/admin/users'])
+            for key in ['quiz_attempts', 'results', 'quiz_creation', 'performance']:
                 action = next((a for a in data['actions'] if a['key'] == key), None)
                 if action:
                     self.assertFalse(action['available'])
@@ -190,3 +190,16 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b'/dashboard.js', content)
         _, content, _ = self.request('GET', '/access')
         self.assertIn(b'/app.js', content)
+
+
+    def test_user_management_link_is_admin_only_and_points_to_a_protected_page(self):
+        for uid in [1, 2, 3]:
+            self.login_sample(uid)
+            action = next((a for a in self.dashboard()['actions'] if a['key'] == 'user_management'), None)
+            if uid == 3:
+                self.assertTrue(action['available'])
+                self.assertEqual(action['href'], '/admin/users')
+                self.assertEqual(self.request('GET', action['href'])[0], 200)
+            else:
+                self.assertIsNone(action)
+                self.assertEqual(self.request('GET', '/admin/users')[0], 403)
