@@ -65,7 +65,7 @@
     for (const material of data.materials) {
       const card = node('article', 'material-card'); const details = node('div', 'material-details');
       const suffix = material.original_name.split('.').pop().slice(0, 5).toUpperCase() || 'FILE';
-      details.append(node('h3', '', material.title), node('div', 'file-meta', `${material.original_name} · ${sizeLabel(material.size_bytes)}`), node('span', 'group-tag', material.group_name));
+      details.append(node('h3', '', material.title), node('div', 'file-meta', `${material.original_name} · ${sizeLabel(material.size_bytes)}`), node('span', 'group-tag', material.folder_name ? `${material.group_name} · ${material.folder_name}` : material.group_name));
       const actions = node('div', 'material-actions');
       if (material.preview_kind) { const view = node('button', 'secondary-button', 'View ↗'); view.type = 'button'; view.dataset.view = String(material.id); actions.append(view); }
       else actions.append(node('span', 'download-only', 'Download only'));
@@ -79,6 +79,48 @@
     byId('next-page').disabled = data.offset + data.materials.length >= data.total;
     byId('library').hidden = false;
   }
+  async function loadUploadFolders(groupId) {
+    const folderSelect = byId('upload-folder');
+    folderSelect.replaceChildren();
+    byId('upload-panel').hidden = true;
+    if (!groupId || !state.session || !['instructor', 'administrator'].includes(state.session.user.role)) return;
+    try {
+      const data = await json(`/api/groups/${groupId}/folders`);
+      if (!data.can_create) return;
+      for (const folder of data.folders) {
+        const option = node('option', '', folder.name);
+        option.value = String(folder.id);
+        folderSelect.append(option);
+      }
+      byId('upload-panel').hidden = false;
+      if (!data.folders.length) {
+        const option = node('option', '', 'Create a folder first from the Folders page');
+        option.value = '';
+        folderSelect.append(option);
+        byId('upload-submit').disabled = true;
+      } else {
+        byId('upload-submit').disabled = false;
+      }
+    } catch (error) {
+      message('upload-status', error.message, true);
+    }
+  }
+  async function configureUpload(groups) {
+    const select = byId('upload-group');
+    select.replaceChildren();
+    for (const group of groups) {
+      const option = node('option', '', group.name);
+      option.value = String(group.id);
+      select.append(option);
+    }
+    if (!groups.length || !state.session || !['instructor', 'administrator'].includes(state.session.user.role)) {
+      byId('upload-panel').hidden = true;
+      return;
+    }
+    select.value = state.group && groups.some(g => String(g.id) === state.group)
+      ? state.group : String(groups[0].id);
+    await loadUploadFolders(select.value);
+  }
   async function loadCatalog(token) {
     clearLibrary(); byId('refresh-library').disabled = true;
     message('library-status', 'Loading study materials…');
@@ -87,7 +129,7 @@
     try {
       const data = await json(`/api/materials?${params}`);
       if (token !== state.revision) return false;
-      render(data); message('library-status', ''); return true;
+      render(data); await configureUpload(data.groups); message('library-status', ''); return true;
     } catch (error) {
       if (token !== state.revision) return false;
       clearLibrary(error.status === 401);
@@ -182,6 +224,42 @@
     if (!state.session || state.switching || byId(id).disabled) return;
     state.offset = Math.max(0, state.offset + direction * state.limit);
     return loadCatalog(++state.revision);
+  });
+  byId('upload-group').addEventListener('change', () => loadUploadFolders(byId('upload-group').value));
+  byId('upload-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const groupId = byId('upload-group').value;
+    const folderId = byId('upload-folder').value;
+    const file = byId('upload-file').files[0];
+    if (!groupId || !folderId || !file || !state.session) {
+      message('upload-status', 'Choose a group, destination folder, and file.', true);
+      return;
+    }
+    const form = new FormData();
+    form.append('folder_id', folderId);
+    form.append('file', file);
+    const button = byId('upload-submit');
+    button.disabled = true;
+    message('upload-status', 'Uploading…');
+    try {
+      const response = await fetch(`/api/groups/${groupId}/materials`, {
+        method: 'POST', body: form, credentials: 'same-origin',
+        headers: {'X-CSRF-Token': state.session.csrf_token}
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Upload failed.');
+      byId('upload-file').value = '';
+      message('upload-status', 'Upload successful! Your material is now in the selected folder.');
+      state.group = groupId;
+      byId('material-group').value = groupId;
+      state.offset = 0;
+      await loadCatalog(++state.revision);
+      message('upload-status', 'Upload successful! Your material is now in the selected folder.');
+    } catch (error) {
+      message('upload-status', error.message, true);
+    } finally {
+      button.disabled = false;
+    }
   });
   byId('sample-accounts').addEventListener('click', async event => {
     const button = event.target.closest('[data-account]');

@@ -32,6 +32,12 @@ ALLOWED_EXTENSIONS = {
     '.txt': 'text/plain',
     '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif', '.webp': 'image/webp',
+    '.md': 'text/markdown', '.py': 'text/x-python', '.js': 'text/javascript',
+    '.java': 'text/x-java-source', '.c': 'text/x-c', '.cpp': 'text/x-c++',
+    '.h': 'text/x-c', '.css': 'text/css', '.json': 'application/json',
+    '.csv': 'text/csv', '.xml': 'application/xml', '.sql': 'application/sql',
 }
 
 
@@ -364,6 +370,30 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 if not message.is_multipart():
                     raise APIError(400, 'Invalid multipart upload.')
+                folder_fields = [
+                    part for part in message.iter_parts()
+                    if part.get_param('name', header='content-disposition') == 'folder_id'
+                    and part.get_content_disposition() == 'form-data'
+                ]
+
+                if len(folder_fields) > 1:
+                    raise APIError(400, 'Provide only one destination folder.')
+
+                folder_id = None
+                if folder_fields:
+                    raw_folder_id = (folder_fields[0].get_payload(decode=True) or b'').decode('utf-8').strip()
+                    if (not raw_folder_id.isdigit() or len(raw_folder_id) > 19
+                            or int(raw_folder_id) < 1 or int(raw_folder_id) > 9223372036854775807):
+                        raise APIError(400, 'Invalid destination folder.')
+                    folder = db.execute(
+                        'SELECT id FROM folders WHERE id=? AND group_id=?',
+                        (int(raw_folder_id), group['id'])
+                    ).fetchone()
+
+                    if not folder:
+                        raise APIError(404, 'Destination folder not found in this group.')
+
+                    folder_id = folder['id']
 
                 files = [
                     part for part in message.iter_parts()
@@ -383,7 +413,7 @@ class Handler(BaseHTTPRequestHandler):
                     raise APIError(400, 'Use a filename of at most 255 characters.')
                 extension = Path(filename).suffix.lower()
                 if not filename or filename in ('.', '..') or extension not in ALLOWED_EXTENSIONS:
-                    raise APIError(415, 'Unsupported file format. Allowed: PDF, TXT, DOCX, PPTX.')
+                    raise APIError(415, 'Unsupported file format. Allowed: documents, PDF, images, and code/text files.')
 
                 data = part.get_payload(decode=True) or b''
                 if not data:
@@ -396,7 +426,17 @@ class Handler(BaseHTTPRequestHandler):
                     raise APIError(415, 'The file content does not match PDF format.')
                 if extension in ('.docx', '.pptx') and not data.startswith(b'PK'):
                     raise APIError(415, 'The file content does not match the selected format.')
-                if extension == '.txt':
+                image_signatures = {
+                    '.png': data.startswith(b'\x89PNG\r\n\x1a\n'),
+                    '.jpg': data.startswith(b'\xff\xd8\xff'),
+                    '.jpeg': data.startswith(b'\xff\xd8\xff'),
+                    '.gif': data[:6] in (b'GIF87a', b'GIF89a'),
+                    '.webp': data.startswith(b'RIFF') and data[8:12] == b'WEBP',
+                }
+                if extension in image_signatures and not image_signatures[extension]:
+                    raise APIError(415, 'The file content does not match the selected image format.')
+                text_extensions = {'.txt', '.md', '.py', '.js', '.java', '.c', '.cpp', '.h', '.css', '.json', '.csv', '.xml', '.sql'}
+                if extension in text_extensions:
                     try:
                         data.decode('utf-8')
                     except UnicodeDecodeError:
@@ -419,10 +459,10 @@ class Handler(BaseHTTPRequestHandler):
                         output.write(data)
                     cursor = db.execute(
                         'INSERT INTO materials '
-                        '(group_id, uploaded_by, title, original_name, stored_name, content_type, size_bytes) '
-                        'VALUES (?, ?, ?, ?, ?, ?, ?)',
-                        (group['id'], user['id'], filename[:160], filename, stored_name,
-                         expected_type, len(data)))
+                        '(group_id, folder_id, uploaded_by, title, original_name, stored_name, content_type, size_bytes) '
+                        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                        (group['id'], folder_id, user['id'], filename[:160], filename,
+                         stored_name, expected_type, len(data)))
                     db.commit()
                 except Exception:
                     stored_path.unlink(missing_ok=True)
@@ -432,6 +472,7 @@ class Handler(BaseHTTPRequestHandler):
                     'material': {
                         'id': cursor.lastrowid,
                         'group_id': group['id'],
+                        'folder_id': folder_id,
                         'filename': filename,
                         'content_type': expected_type,
                         'size_bytes': len(data),
@@ -444,7 +485,7 @@ class Handler(BaseHTTPRequestHandler):
                     raise APIError(400, 'Invalid study group ID.')
                 group = group_access(db, user, int(raw_id))
                 rows = db.execute(
-                    'SELECT id, group_id, uploaded_by, original_name AS filename, content_type, size_bytes, created_at '
+                    'SELECT id, group_id, folder_id, uploaded_by, original_name AS filename, content_type, size_bytes, created_at '
                     'FROM materials WHERE group_id = ? ORDER BY created_at DESC, id DESC',
                     (group['id'],)
                 ).fetchall()

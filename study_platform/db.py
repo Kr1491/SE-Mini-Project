@@ -9,6 +9,7 @@ MATERIALS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS materials (
     id INTEGER PRIMARY KEY,
     group_id INTEGER NOT NULL REFERENCES study_groups(id),
+        folder_id INTEGER REFERENCES folders(id),
     title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 160),
     original_name TEXT NOT NULL CHECK(length(original_name) BETWEEN 1 AND 255),
     stored_name TEXT NOT NULL UNIQUE CHECK(length(stored_name) BETWEEN 1 AND 180),
@@ -129,13 +130,30 @@ def _migrate_study_group_description(db):
         )
 
 
+
+def _migrate_material_folders(db):
+    columns = {
+        row['name'] for row in db.execute('PRAGMA table_info(materials)')
+    }
+    if 'folder_id' not in columns:
+        db.execute(
+            'ALTER TABLE materials ADD COLUMN folder_id '
+            'INTEGER REFERENCES folders(id)'
+        )
+    db.execute(
+        'CREATE INDEX IF NOT EXISTS materials_folder ON materials(folder_id)'
+    )
 def initialize(path):
     _secure_database(path)
     with connect(path) as db:
         db.executescript(SCHEMA)
         _migrate_upload_materials(db)
+        _migrate_material_folders(db)
         _migrate_study_group_description(db)
-        columns = {row['name']: row for row in db.execute('PRAGMA table_info(sessions)')}
+        columns = {
+            row['name']: row
+            for row in db.execute('PRAGMA table_info(sessions)')
+        }
         if 'is_demo' not in columns or not columns['token_hash']['notnull']:
             db.execute("""CREATE TABLE sessions_migrated (
                 token_hash TEXT PRIMARY KEY NOT NULL,
