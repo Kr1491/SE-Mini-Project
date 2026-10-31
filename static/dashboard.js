@@ -41,7 +41,7 @@
     delete document.body.dataset.role;
   }
   function safeHref(value) {
-    return typeof value === 'string' && (/^#[a-z0-9-]+$/.test(value) || value === '/access' || value === '/access#folders-panel' || value === '/materials' || value === '/admin/users') ? value : null;
+    return typeof value === 'string' && (/^#[a-z0-9-]+$/.test(value) || value === '/access' || value === '/access#folders-panel' || value === '/materials' || value === '/admin/users' || value === '/quizzes') ? value : null;
   }
   function render(data) {
     document.body.dataset.role = data.role;
@@ -68,6 +68,30 @@
     }
     const createGroupPanel = byId('create-group-panel');
     createGroupPanel.hidden = data.role !== 'instructor';
+
+    const quizCreationPanel = byId('quiz-creation-panel');
+    const isQuizPage = globalThis.location?.pathname === '/quizzes';
+    quizCreationPanel.hidden = !isQuizPage || data.role !== 'instructor';
+
+    const quizGroupSelect = byId('quiz-group');
+    quizGroupSelect.replaceChildren(
+      node('option', '', 'Choose a study group')
+    );
+    quizGroupSelect.options[0].value = '';
+
+    const manageableGroups = data.groups.filter(group => group.can_manage);
+
+    for (const group of manageableGroups) {
+      const option = node('option', '', group.name);
+      option.value = String(group.id);
+      quizGroupSelect.append(option);
+    }
+
+    if (!manageableGroups.length) {
+      const option = node('option', '', 'Create a study group first');
+      option.disabled = true;
+      quizGroupSelect.append(option);
+    }
     byId('groups-heading').textContent = data.group_heading;
     byId('groups-count').textContent = `${data.groups.length} ${data.groups.length === 1 ? 'group' : 'groups'}`;
     for (const group of data.groups) {
@@ -205,6 +229,124 @@
       button.disabled = false;
     }
   });
+  let quizQuestionCounter = 0;
+
+  function addQuizQuestion() {
+    const questionNumber = ++quizQuestionCounter;
+    const card = node('fieldset', 'quiz-question-card');
+    card.dataset.question = String(questionNumber);
+
+    const heading = node('legend', '', `Question ${questionNumber}`);
+    const questionInput = node('textarea', 'quiz-question-input');
+    questionInput.placeholder = 'Enter your question';
+    questionInput.required = true;
+    questionInput.maxLength = 1000;
+    card.append(heading, questionInput);
+
+    const optionsContainer = node('div', 'quiz-options');
+
+    for (let index = 0; index < 4; index++) {
+      const optionRow = node('label', 'quiz-option-row');
+      const radio = node('input');
+      radio.type = 'radio';
+      radio.name = `correct-answer-${questionNumber}`;
+      radio.value = String(index);
+      radio.required = true;
+      if (index === 0) radio.checked = true;
+
+      const optionInput = node('input', 'quiz-option-input');
+      optionInput.type = 'text';
+      optionInput.placeholder = `Option ${index + 1}`;
+      optionInput.maxLength = 500;
+      optionInput.required = true;
+
+      optionRow.append(radio, optionInput);
+      optionsContainer.append(optionRow);
+    }
+
+    card.append(optionsContainer);
+
+    const removeButton = node('button', 'text-button', 'Remove question');
+    removeButton.type = 'button';
+    removeButton.addEventListener('click', () => card.remove());
+    card.append(removeButton);
+
+    byId('quiz-questions').append(card);
+  }
+
+  byId('add-quiz-question').addEventListener('click', addQuizQuestion);
+  addQuizQuestion();
+
+  byId('create-quiz-form').addEventListener('submit', async event => {
+    event.preventDefault();
+
+    if (!currentSession || currentSession.user.role !== 'instructor') {
+      return;
+    }
+
+    const form = event.currentTarget;
+    const button = byId('create-quiz-button');
+    const message = byId('create-quiz-status');
+    const groupId = Number(byId('quiz-group').value);
+    const title = byId('quiz-title').value.trim();
+    const questionCards = [...byId('quiz-questions').querySelectorAll('.quiz-question-card')];
+
+    message.textContent = '';
+    message.classList.remove('error');
+
+    if (!groupId || !title || !questionCards.length) {
+      message.textContent = 'Choose a group, enter a title, and add at least one question.';
+      message.classList.add('error');
+      return;
+    }
+
+    const questions = questionCards.map(card => {
+      const question = card.querySelector('.quiz-question-input').value.trim();
+      const optionRows = [...card.querySelectorAll('.quiz-option-row')];
+
+      return {
+        question,
+        options: optionRows.map(row => ({
+          text: row.querySelector('.quiz-option-input').value.trim(),
+          is_correct: row.querySelector('input[type="radio"]').checked
+        }))
+      };
+    });
+
+    if (questions.some(question =>
+      !question.question ||
+      question.options.length < 2 ||
+      question.options.some(option => !option.text) ||
+      question.options.filter(option => option.is_correct).length !== 1
+    )) {
+      message.textContent = 'Complete every question and option, and select exactly one correct answer per question.';
+      message.classList.add('error');
+      return;
+    }
+
+    button.disabled = true;
+
+    try {
+      const result = await request(`/api/groups/${groupId}/quizzes`, {
+        method: 'POST',
+        body: JSON.stringify({title, questions})
+      });
+
+      form.reset();
+      byId('quiz-questions').replaceChildren();
+      quizQuestionCounter = 0;
+      addQuizQuestion();
+
+      message.textContent = result.quiz.message || 'Quiz created successfully.';
+      message.classList.remove('error');
+    } catch (error) {
+      message.textContent = error.message;
+      message.classList.add('error');
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   (async () => {
     try {
       const health = await request('/api/health');

@@ -53,6 +53,40 @@
   </form>
 </section>
 
+<section id="quiz-creation-panel" class="create-group-panel" hidden>
+  <h2>Create a quiz</h2>
+  <p class="muted">Create questions and answer options for your study group.</p>
+
+  <form id="create-quiz-form">
+    <label for="quiz-group">Study group</label>
+    <select id="quiz-group" name="group_id" required>
+      <option value="">Choose a study group</option>
+    </select>
+
+    <label for="quiz-title">Quiz title</label>
+    <input
+      id="quiz-title"
+      name="title"
+      type="text"
+      maxlength="160"
+      required
+      placeholder="e.g. Introduction to Machine Learning"
+    >
+
+    <div id="quiz-questions"></div>
+
+    <button type="button" id="add-quiz-question" class="secondary-button">
+      Add question
+    </button>
+
+    <button type="submit" id="create-quiz-button" class="secondary-button">
+      Create quiz
+    </button>
+
+    <p id="create-quiz-status" role="status" aria-live="polite"></p>
+  </form>
+</section>
+
 <div class="section-heading tools-heading"><div><p class="eyebrow">YOUR NEXT STEP</p><h2 id="tools-heading"></h2></div><span class="count-label">Actions for your role</span></div>
 <section id="tools" class="tools-grid" aria-label="Available tools"></section>
 <div class="refresh-row"><span id="updated-at" class="muted"></span><button id="refresh-dashboard" class="text-button" type="button">Refresh overview ↻</button></div>
