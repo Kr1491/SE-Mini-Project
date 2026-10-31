@@ -140,3 +140,14 @@ Jiya's future authentication UI should navigate to `/dashboard` after verified l
 Demo mode keeps the existing validated sample-account endpoint; it never converts a sample selection into a real credential login. The login page exposes sample controls only when `/api/health` declares demo mode. Normal mode has no default password. Registration UI should use the existing registration helper and the same real database, then link to `/login`. See [login.md](login.md).
 
 The duplicate upload material schema has been reconciled with the viewer schema. Upload metadata now supplies `title`/`original_name`; the group listing aliases original_name as filename to keep its API compatible. Legacy filename-only records migrate transactionally. Uploads and protected retrieval use the same storage; existing legacy upload directories can be selected explicitly with `--storage`. No old file bytes are moved or overwritten automatically.
+
+
+## Issue #18 — administrator account management
+
+`GET /admin/users` is the Administrator-only page; its API is `GET /api/admin/users`. Query options are `q` (literal name/email search, up to 100 characters), `role` (student/instructor/administrator or empty), `access` (all/active/inactive), `limit` (1–50, default 20) and `offset` (nonnegative). The list returns safe account details, effective role permissions, pagination and a read_only flag; it omits credential and session data.
+
+`POST /api/admin/users/{id}` takes exactly `role`, boolean `is_active` and integer `version`, plus the active session's CSRF header. Example: `{"role":"instructor","is_active":true,"version":0}`. Only current active Administrators may use this API; authority is reread within the write transaction. Demo mode is read-only. Unknown fields/roles/types return 400; a missing account returns 404; stale versions and self-demotion/suspension return 409. At least one active Administrator must remain.
+
+The additive `users.access_version` starts at zero and increments on actual role/status changes. Stale edits cannot overwrite a newer state. Successful changes delete all of the affected user's sessions and insert `user_access_audit` with the actor/target IDs, old/new role/access and UTC change timestamp. These writes commit together before success is returned; an audit failure rolls the entire change back. Reactivation requires fresh sign-in and never restores old tokens. No-op requests neither revoke sessions nor create audit entries.
+
+Permissions continue to derive from the existing role mapping and group ownership/membership. This feature does not add arbitrary individual permission overrides, password/account deletion operations, or group ownership transfers. Existing account data is preserved by initialization. The audit table remains private database data; it is not exposed to student/instructor responses.

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>StudySpace · Users and permissions</title><link rel="stylesheet" href="/admin-users.css"><script src="/admin-users.js" defer></script></head>
+<body>
+<header><a class="brand" href="/dashboard"><span class="brand-mark">S</span>StudySpace<span class="brand-dot">.</span></a><div class="header-links"><a href="/dashboard">← Dashboard</a><span id="admin-profile"></span></div></header>
+<main><section class="page-heading"><div><p class="eyebrow">A WELL-ORGANIZED WORKSPACE</p><h1>People & permissions<span>.</span></h1><p class="intro">Give each person the right role and keep access to your learning community up to date.</p></div><span class="admin-badge">Administrator</span></section>
+<p id="admin-status" class="message" role="status" aria-live="polite">Loading accounts…</p>
+<div id="manage-content" hidden>
+<p id="demo-notice" class="notice" hidden>Local demo: sample accounts are read-only. Use your local test accounts to try role and access changes.</p>
+<section id="role-guide" class="role-guide" aria-label="Permissions by role"></section>
+<section class="account-panel" aria-labelledby="accounts-heading"><div class="section-heading"><div><p class="eyebrow">YOUR LEARNING COMMUNITY</p><h2 id="accounts-heading">Registered accounts</h2></div><span id="account-count" class="muted"></span></div>
+<form id="account-filters" class="filters"><div class="search-field"><label for="account-search">Find a person</label><input id="account-search" type="search" maxlength="100" placeholder="Search by name or email"></div><div><label for="role-filter">Role</label><select id="role-filter"><option value="">All roles</option><option value="student">Student</option><option value="instructor">Instructor</option><option value="administrator">Administrator</option></select></div><div><label for="access-filter">Access</label><select id="access-filter"><option value="all">All accounts</option><option value="active">Active</option><option value="inactive">Suspended</option></select></div><button id="apply-filters" class="primary-button" type="submit">Search</button><button id="refresh-users" class="secondary-button" type="button">Refresh ↻</button></form>
+<p class="table-note">Changing a role or access status signs that person out. Your own role and access are protected.</p>
+<div class="table-scroll"><table><caption class="visually-hidden">Registered accounts and their access settings</caption><thead><tr><th scope="col">Person</th><th scope="col">Role</th><th scope="col">Account access</th><th scope="col"><span class="visually-hidden">Save changes</span></th></tr></thead><tbody id="user-rows"></tbody></table></div>
+<div class="pagination"><button id="previous-page" class="secondary-button" type="button" disabled>← Previous</button><span id="page-info" class="muted"></span><button id="next-page" class="secondary-button" type="button" disabled>Next →</button></div></section>
+</div><footer>A shared space for better learning.<span>StudySpace / Administration</span></footer></main>
+<dialog id="confirm-dialog" aria-labelledby="confirm-title"><div class="dialog-heading"><p class="eyebrow">REVIEW ACCESS CHANGE</p><h2 id="confirm-title">Update this account?</h2></div><p id="confirm-person"></p><p id="confirm-details"></p><p class="muted">Existing sessions for this person will end. They will need to sign in again with their new access.</p><div class="dialog-actions"><button id="cancel-change" class="secondary-button" type="button">Cancel</button><button id="confirm-change" class="primary-button" type="button">Confirm change</button></div></dialog>
+</body></html>
