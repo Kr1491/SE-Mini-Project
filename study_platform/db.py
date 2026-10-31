@@ -145,10 +145,42 @@ def _migrate_material_folders(db):
     db.execute(
         'CREATE INDEX IF NOT EXISTS materials_folder ON materials(folder_id)'
     )
+
+
+QUIZ_SCHEMA = """
+CREATE TABLE IF NOT EXISTS quizzes (
+    id INTEGER PRIMARY KEY,
+    group_id INTEGER NOT NULL REFERENCES study_groups(id),
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 160),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS quiz_questions (
+    id INTEGER PRIMARY KEY,
+    quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+    question_text TEXT NOT NULL CHECK(length(trim(question_text)) > 0),
+    position INTEGER NOT NULL CHECK(position >= 0),
+    UNIQUE(quiz_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS quiz_options (
+    id INTEGER PRIMARY KEY,
+    question_id INTEGER NOT NULL REFERENCES quiz_questions(id) ON DELETE CASCADE,
+    option_text TEXT NOT NULL CHECK(length(trim(option_text)) > 0),
+    is_correct INTEGER NOT NULL DEFAULT 0 CHECK(is_correct IN (0, 1))
+);
+
+CREATE INDEX IF NOT EXISTS quizzes_group ON quizzes(group_id);
+CREATE INDEX IF NOT EXISTS quiz_questions_quiz ON quiz_questions(quiz_id);
+CREATE INDEX IF NOT EXISTS quiz_options_question ON quiz_options(question_id);
+"""
+
+
 def initialize(path):
     _secure_database(path)
     with connect(path) as db:
-        db.executescript(SCHEMA + AUDIT_SCHEMA)
+        db.executescript(SCHEMA + AUDIT_SCHEMA + QUIZ_SCHEMA)
         user_columns = {row['name'] for row in db.execute('PRAGMA table_info(users)')}
         if 'access_version' not in user_columns:
             db.execute('ALTER TABLE users ADD COLUMN access_version INTEGER NOT NULL DEFAULT 0 CHECK(access_version>=0)')
