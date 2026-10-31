@@ -463,6 +463,48 @@ class Handler(BaseHTTPRequestHandler):
                     if b'\x00' in data:
                         raise APIError(415, 'The file content is not valid text.')
 
+                idempotency_key = self.headers.get('Idempotency-Key')
+                request_hash = None
+
+                if idempotency_key is not None:
+                    idempotency_key = idempotency_key.strip()
+                    if not idempotency_key or len(idempotency_key) > 128:
+                        raise APIError(400, 'Invalid Idempotency-Key header.')
+
+                    hash_input = json.dumps(
+                        [group['id'], folder_id, filename, expected_type],
+                        separators=(',', ':')
+                    ).encode('utf-8') + b'\\0' + data
+                    request_hash = hashlib.sha256(hash_input).hexdigest()
+
+                    db.execute('BEGIN IMMEDIATE')
+                    previous = db.execute(
+                        'SELECT i.request_hash, m.id, m.group_id, m.folder_id, '
+                        'm.original_name, m.content_type, m.size_bytes '
+                        'FROM upload_idempotency i '
+                        'JOIN materials m ON m.id = i.material_id '
+                        'WHERE i.user_id = ? AND i.group_id = ? '
+                        'AND i.idempotency_key = ?',
+                        (user['id'], group['id'], idempotency_key)
+                    ).fetchone()
+
+                    if previous:
+                        if previous['request_hash'] != request_hash:
+                            raise APIError(
+                                409,
+                                'This Idempotency-Key was already used for a different upload.'
+                            )
+                        return self.json(200, {
+                            'material': {
+                                'id': previous['id'],
+                                'group_id': previous['group_id'],
+                                'folder_id': previous['folder_id'],
+                                'filename': previous['original_name'],
+                                'content_type': previous['content_type'],
+                                'size_bytes': previous['size_bytes'],
+                            }
+                        })
+
                 stored_name = uuid.uuid4().hex + extension
                 upload_dir = Path(getattr(self.server, 'storage', getattr(self.server, 'upload_dir', ROOT / 'var' / 'uploads')))
                 initialize_storage(upload_dir)
@@ -482,6 +524,15 @@ class Handler(BaseHTTPRequestHandler):
                         'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                         (group['id'], folder_id, user['id'], filename[:160], filename,
                          stored_name, expected_type, len(data)))
+                    if idempotency_key is not None:
+                        db.execute(
+                            'INSERT INTO upload_idempotency '
+                            '(user_id, group_id, idempotency_key, request_hash, material_id) '
+                            'VALUES (?, ?, ?, ?, ?)',
+                            (user['id'], group['id'], idempotency_key,
+                             request_hash, cursor.lastrowid)
+                        )
+
                     db.commit()
                 except Exception:
                     stored_path.unlink(missing_ok=True)
