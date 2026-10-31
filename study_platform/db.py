@@ -143,12 +143,29 @@ def _migrate_material_folders(db):
     db.execute(
         'CREATE INDEX IF NOT EXISTS materials_folder ON materials(folder_id)'
     )
+def _migrate_upload_idempotency(db):
+    """Track successful uploads so retries do not create duplicate materials."""
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS upload_idempotency (
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            group_id INTEGER NOT NULL REFERENCES study_groups(id),
+            idempotency_key TEXT NOT NULL
+                CHECK(length(idempotency_key) BETWEEN 1 AND 128),
+            request_hash TEXT NOT NULL CHECK(length(request_hash) = 64),
+            material_id INTEGER NOT NULL REFERENCES materials(id)
+                ON DELETE CASCADE,
+            PRIMARY KEY(user_id, group_id, idempotency_key)
+        )
+    """)
+
+
 def initialize(path):
     _secure_database(path)
     with connect(path) as db:
         db.executescript(SCHEMA)
         _migrate_upload_materials(db)
         _migrate_material_folders(db)
+        _migrate_upload_idempotency(db)
         _migrate_study_group_description(db)
         columns = {
             row['name']: row

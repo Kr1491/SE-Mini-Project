@@ -29,7 +29,7 @@ class UploadTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def request(self, method, path, body=b'', content_type=None):
+    def request(self, method, path, body=b'', content_type=None, extra_headers=None):
         headers = {
             'Host': '127.0.0.1:8000',
             'Connection': 'close',
@@ -39,6 +39,8 @@ class UploadTests(unittest.TestCase):
         }
         if content_type:
             headers['Content-Type'] = content_type
+        if extra_headers:
+            headers.update(extra_headers)
         raw = (
             f'{method} {path} HTTP/1.1\r\n'
             + ''.join(f'{k}: {v}\r\n' for k, v in headers.items())
@@ -149,6 +151,152 @@ class UploadTests(unittest.TestCase):
         )
         self.assertEqual(status, 415)
         self.assertIn('does not match PDF', result['error'])
+
+
+    def test_database_failure_removes_uploaded_file_and_record(self):
+        self.login(1)
+
+        with connect(self.database) as db:
+            db.execute("""
+                CREATE TRIGGER reject_material_insert
+                BEFORE INSERT ON materials
+                BEGIN
+                    SELECT RAISE(ABORT, 'simulated database failure');
+                END
+            """)
+
+        body, content_type = self.multipart(
+            'recovery-test.pdf', b'%PDF-1.4 recovery test'
+        )
+
+        status, result, _ = self.request(
+            'POST', '/api/groups/1/materials', body, content_type
+        )
+
+        self.assertEqual(status, 500, result)
+
+        with connect(self.database) as db:
+            count = db.execute(
+                'SELECT COUNT(*) FROM materials'
+            ).fetchone()[0]
+
+        self.assertEqual(count, 0)
+        self.assertEqual(list(self.upload_dir.iterdir()), [])
+
+
+    def test_retry_after_database_failure_creates_only_one_record_and_file(self):
+        self.login(1)
+
+        with connect(self.database) as db:
+            db.execute("""
+                CREATE TRIGGER reject_material_insert
+                BEFORE INSERT ON materials
+                BEGIN
+                    SELECT RAISE(ABORT, 'simulated database failure');
+                END
+            """)
+
+        body, content_type = self.multipart(
+            'retry-test.pdf', b'%PDF-1.4 retry test'
+        )
+
+        status, _, _ = self.request(
+            'POST', '/api/groups/1/materials', body, content_type
+        )
+        self.assertEqual(status, 500)
+
+        with connect(self.database) as db:
+            db.execute('DROP TRIGGER reject_material_insert')
+
+        status, result, _ = self.request(
+            'POST', '/api/groups/1/materials', body, content_type
+        )
+        self.assertEqual(status, 201, result)
+
+        with connect(self.database) as db:
+            count = db.execute(
+                'SELECT COUNT(*) FROM materials'
+            ).fetchone()[0]
+
+        self.assertEqual(count, 1)
+        self.assertEqual(len(list(self.upload_dir.iterdir())), 1)
+
+
+    def test_same_idempotency_key_returns_original_upload(self):
+        self.login(1)
+        body, content_type = self.multipart(
+            'same-upload.pdf', b'%PDF-1.4 same upload'
+        )
+        headers = {'Idempotency-Key': 'upload-retry-001'}
+
+        first_status, first_result, _ = self.request(
+            'POST', '/api/groups/1/materials', body, content_type, headers
+        )
+        second_status, second_result, _ = self.request(
+            'POST', '/api/groups/1/materials', body, content_type, headers
+        )
+
+        self.assertEqual(first_status, 201, first_result)
+        self.assertEqual(second_status, 200, second_result)
+        self.assertEqual(
+            first_result['material']['id'],
+            second_result['material']['id']
+        )
+        with connect(self.database) as db:
+            count = db.execute('SELECT COUNT(*) FROM materials').fetchone()[0]
+        self.assertEqual(count, 1)
+        self.assertEqual(len(list(self.upload_dir.iterdir())), 1)
+
+    def test_same_idempotency_key_with_different_upload_is_rejected(self):
+        self.login(1)
+        headers = {'Idempotency-Key': 'upload-retry-002'}
+
+        body1, content_type = self.multipart(
+            'first.pdf', b'%PDF-1.4 first file'
+        )
+        body2, _ = self.multipart(
+            'second.pdf', b'%PDF-1.4 second file'
+        )
+
+        status1, result1, _ = self.request(
+            'POST', '/api/groups/1/materials', body1, content_type, headers
+        )
+        status2, result2, _ = self.request(
+            'POST', '/api/groups/1/materials', body2, content_type, headers
+        )
+
+        self.assertEqual(status1, 201, result1)
+        self.assertEqual(status2, 409, result2)
+        with connect(self.database) as db:
+            count = db.execute('SELECT COUNT(*) FROM materials').fetchone()[0]
+        self.assertEqual(count, 1)
+        self.assertEqual(len(list(self.upload_dir.iterdir())), 1)
+
+    def test_different_idempotency_keys_create_separate_uploads(self):
+        self.login(1)
+        body, content_type = self.multipart(
+            'separate.pdf', b'%PDF-1.4 separate upload'
+        )
+
+        first_status, first_result, _ = self.request(
+            'POST', '/api/groups/1/materials', body, content_type,
+            {'Idempotency-Key': 'upload-separate-001'}
+        )
+        second_status, second_result, _ = self.request(
+            'POST', '/api/groups/1/materials', body, content_type,
+            {'Idempotency-Key': 'upload-separate-002'}
+        )
+
+        self.assertEqual(first_status, 201, first_result)
+        self.assertEqual(second_status, 201, second_result)
+        self.assertNotEqual(
+            first_result['material']['id'],
+            second_result['material']['id']
+        )
+        with connect(self.database) as db:
+            count = db.execute('SELECT COUNT(*) FROM materials').fetchone()[0]
+        self.assertEqual(count, 2)
+        self.assertEqual(len(list(self.upload_dir.iterdir())), 2)
 
 
 class MaterialSchemaCompatibilityTests(unittest.TestCase):
