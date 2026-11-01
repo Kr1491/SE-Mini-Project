@@ -39,42 +39,6 @@ class QuizTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def request(self, method, path, data=None):
-        headers = {
-            'Host': '127.0.0.1:8000',
-            'Connection': 'close',
-            'Cookie': self.cookie,
-            'X-CSRF-Token': self.csrf,
-        }
-
-        body = b'' if data is None else json.dumps(data).encode()
-        if data is not None:
-            headers['Content-Type'] = 'application/json'
-            headers['Content-Length'] = str(len(body))
-
-        raw_request = (
-            f'{method} {path} HTTP/1.1\r\n'
-            + ''.join(f'{key}: {value}\r\n' for key, value in headers.items())
-            + '\r\n'
-        ).encode() + body
-
-        connection = MemoryConnection(raw_request)
-        Handler(connection, ('127.0.0.1', 12345), self.server)
-
-        head, content = connection.output.getvalue().split(b'\r\n\r\n', 1)
-        lines = head.decode().split('\r\n')
-        status = int(lines[0].split()[1])
-        response_headers = dict(
-            line.split(': ', 1) for line in lines[1:]
-        )
-
-        if content and response_headers.get('Content-Type', '').startswith(
-            'application/json'
-        ):
-            content = json.loads(content)
-
-        return status, content
-
     def login_sample(self, user_id):
         status, body = self.request(
             'POST', '/api/demo/session', {'user_id': user_id}
@@ -281,6 +245,60 @@ class QuizTests(unittest.TestCase):
 
         self.assertEqual(status, 200)
         self.assertNotIn('is_correct', json.dumps(result))
+
+
+    def test_unauthenticated_and_missing_csrf_requests_are_denied(self):
+        self.assertEqual(self.request('GET','/api/groups/1/quizzes')[0],401)
+        self.assertEqual(self.request('POST','/api/groups/1/quizzes',self.valid_quiz())[0],401)
+        self.login_sample(1); self.csrf = 'wrong'
+        self.assertEqual(self.request('POST','/api/groups/1/quizzes',self.valid_quiz())[0],403)
+
+    def test_invalid_text_and_payload_types_are_rejected_without_partial_records(self):
+        self.login_sample(1)
+        for field,value in [('title','\ud800'),('title','bad\x00title'),('title','x'*161),('question','q'*1001),('question','\ud800'),('option','o'*501),('option','\ud800')]:
+            quiz=self.valid_quiz()
+            if field=='title': quiz['title']=value
+            elif field=='question': quiz['questions'][0]['question']=value
+            else: quiz['questions'][0]['options'][0]['text']=value
+            self.assertEqual(self.request('POST','/api/groups/1/quizzes',quiz)[0],400)
+        quiz=self.valid_quiz();quiz['questions'][0]['options'][0]['is_correct']='true'
+        self.assertEqual(self.request('POST','/api/groups/1/quizzes',quiz)[0],400)
+        with connect(self.database) as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM quizzes').fetchone()[0],0)
+
+    def test_database_failure_rolls_back_quiz_questions_and_options(self):
+        self.login_sample(1)
+        with connect(self.database) as db:
+            db.execute("CREATE TRIGGER reject_quiz_option BEFORE INSERT ON quiz_options BEGIN SELECT RAISE(ABORT,'test failure'); END")
+        self.assertEqual(self.request('POST','/api/groups/1/quizzes',self.valid_quiz())[0],400)
+        with connect(self.database) as db:
+            for table in ['quizzes','quiz_questions','quiz_options']:
+                self.assertEqual(db.execute('SELECT count(*) FROM '+table).fetchone()[0],0)
+
+    def test_stale_author_role_cannot_create_quiz_after_revocation(self):
+        from study_platform.quizzes import create_quiz
+        from study_platform.security import APIError
+        with connect(self.database) as db:
+            db.execute("UPDATE users SET role='student' WHERE id=1")
+        with self.assertRaises(APIError) as error:
+            with connect(self.database) as db:
+                create_quiz(db,{'id':1,'role':'instructor'},1,self.valid_quiz())
+        self.assertEqual(error.exception.status,403)
+
+    def test_quiz_and_upload_recovery_schemas_coexist(self):
+        from study_platform.recovery import create_backup,restore_backup
+        self.login_sample(1)
+        self.assertEqual(self.request('POST','/api/groups/1/quizzes',self.valid_quiz())[0],201)
+        storage=Path(self.temp.name)/'files';storage.mkdir(mode=0o700)
+        (storage/'notes.txt').write_text('Saved academic material')
+        backup=create_backup(self.database,storage,Path(self.temp.name)/'backups')
+        with connect(self.database) as db:db.execute('DELETE FROM quizzes')
+        restore_backup(backup,self.database,storage)
+        with connect(self.database) as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM quizzes').fetchone()[0],1)
+            self.assertEqual(db.execute('SELECT count(*) FROM quiz_options WHERE is_correct=1').fetchone()[0],2)
+            self.assertIsNotNone(db.execute("SELECT 1 FROM sqlite_master WHERE name='upload_idempotency'").fetchone())
+        self.assertEqual((storage/'notes.txt').read_text(),'Saved academic material')
 
 
 if __name__ == '__main__':

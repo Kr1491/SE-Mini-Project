@@ -4,19 +4,28 @@ import sqlite3
 from .security import APIError, group_access, require_permission
 
 
+
+def _text(value, maximum, message):
+    if not isinstance(value, str) or not 1 <= len(value.strip()) <= maximum or '\x00' in value:
+        raise APIError(400, message)
+    try:
+        value.encode('utf-8')
+    except UnicodeError:
+        raise APIError(400, message)
+    return value.strip()
+
+
 def create_quiz(db, user, group_id, data):
     require_permission(user, 'quiz.create')
 
     if not isinstance(data, dict):
         raise APIError(400, 'Expected a quiz details object.')
 
-    title = data.get('title')
-    if not isinstance(title, str) or not 1 <= len(title.strip()) <= 160:
-        raise APIError(400, 'Quiz title must contain 1–160 characters.')
+    title = _text(data.get('title'), 160, 'Quiz title must contain 1–160 valid characters.')
 
     questions = data.get('questions')
-    if not isinstance(questions, list) or not questions:
-        raise APIError(400, 'Add at least one question to the quiz.')
+    if not isinstance(questions, list) or not 1 <= len(questions) <= 100:
+        raise APIError(400, 'Add between 1 and 100 questions to the quiz.')
 
     validated_questions = []
 
@@ -24,13 +33,12 @@ def create_quiz(db, user, group_id, data):
         if not isinstance(question, dict):
             raise APIError(400, f'Question {index} is invalid.')
 
-        question_text = question.get('question')
-        if not isinstance(question_text, str) or not question_text.strip():
-            raise APIError(400, f'Question {index} needs question text.')
+        question_text = _text(question.get('question'), 1000,
+                              f'Question {index} needs 1–1000 valid characters of question text.')
 
         options = question.get('options')
-        if not isinstance(options, list) or len(options) < 2:
-            raise APIError(400, f'Question {index} needs at least two options.')
+        if not isinstance(options, list) or not 2 <= len(options) <= 20:
+            raise APIError(400, f'Question {index} needs between two and twenty options.')
 
         validated_options = []
         correct_count = 0
@@ -41,13 +49,9 @@ def create_quiz(db, user, group_id, data):
                     400, f'Option {option_index} in question {index} is invalid.'
                 )
 
-            option_text = option.get('text')
+            option_text = _text(option.get('text'), 500,
+                                f'Option {option_index} in question {index} needs 1–500 valid characters.')
             is_correct = option.get('is_correct', False)
-
-            if not isinstance(option_text, str) or not option_text.strip():
-                raise APIError(
-                    400, f'Option {option_index} in question {index} cannot be empty.'
-                )
 
             if type(is_correct) is not bool:
                 raise APIError(
@@ -72,7 +76,11 @@ def create_quiz(db, user, group_id, data):
     if not db.in_transaction:
         db.execute('BEGIN IMMEDIATE')
 
-    group_access(db, user, group_id, manage=True)
+    current = db.execute('SELECT id,role,is_active FROM users WHERE id=?', (user['id'],)).fetchone()
+    if current is None or not current['is_active']:
+        raise APIError(401, 'Your account is unavailable. Sign in again.')
+    require_permission(current, 'quiz.create')
+    group_access(db, current, group_id, manage=True)
 
     try:
         quiz_cursor = db.execute(

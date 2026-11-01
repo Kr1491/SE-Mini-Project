@@ -29,10 +29,18 @@ class Element {
     const values = new Set();
     this.classList = {add: v => values.add(v), remove: v => values.delete(v), contains: v => values.has(v), toggle: (v, enabled) => enabled ? values.add(v) : values.delete(v)};
   }
-  append(...items) { this.children.push(...items); }
-  replaceChildren() { this.children = []; }
+  append(...items) { this.children.push(...items); for (const item of items) item.parent = this; }
+  replaceChildren(...items) { this.children = []; this.append(...items); }
+  remove() { if (this.parent) this.parent.children = this.parent.children.filter(item => item !== this); }
+  reset() { for (const item of descendants(this)) { item.value = ''; item.checked = false; } }
   addEventListener(event, fn) { this.handlers[event] = fn; }
-  querySelectorAll() { return this.buttons || []; }
+  querySelectorAll(selector) {
+    if (this.buttons) return this.buttons;
+    return descendants(this).filter(item => selector.startsWith('.')
+      ? (item.className || '').split(' ').includes(selector.slice(1))
+      : selector === 'input[type="radio"]' && item.tagName === 'input' && item.type === 'radio');
+  }
+  querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
   closest(selector) { return selector === '[data-account]' && this.dataset.account ? this : null; }
 }
 function harness(fetch, pathname = '/dashboard') {
@@ -40,11 +48,13 @@ function harness(fetch, pathname = '/dashboard') {
   const get = id => { if (!elements.has(id)) elements.set(id, new Element('div', id)); return elements.get(id); };
   const buttons = [1, 2, 3, 4].map(uid => { const b = new Element('button'); b.dataset.account = String(uid); return b; });
   get('sample-accounts').buttons = buttons;
+  get('create-quiz-form').append(get('quiz-group'), get('quiz-title'), get('quiz-questions'));
   const navigations = [];
   const document = {body: {dataset: {}}, title: '', getElementById: get, createElement: tag => { const n = new Element(tag); created.push(n); return n; }};
   vm.runInNewContext(source, {document, fetch, location: {pathname, replace: url => navigations.push(url)}}, {filename: 'dashboard.js'});
   return {get, document, created, navigations, logout: () => get('logout').handlers.click(), select: uid => get('sample-accounts').handlers.click({target: buttons.find(b => Number(b.dataset.account) === uid)}),
-    refresh: () => get('refresh-dashboard').handlers.click()};
+    refresh: () => get('refresh-dashboard').handlers.click(),
+    submitQuiz: () => get('create-quiz-form').handlers.submit({preventDefault() {}, currentTarget: get('create-quiz-form')})};
 }
 function mockWorkspace(initial = 2, demo = true, customize = data => data) {
   let selected = initial;
@@ -230,4 +240,64 @@ test('administrator management link uses the exact allowed local path', async ()
   const links = descendants(ui.get('tools')).filter(node=>node.tagName==='a').map(node=>node.href);
   assert.ok(links.includes('/admin/users'));
   assert.equal(links.includes('/admin/users-external'),false);
+});
+
+
+function fillQuiz(ui) {
+  ui.get('quiz-group').value = '1'; ui.get('quiz-title').value = 'Private quiz title';
+  const card = ui.get('quiz-questions').children[0];
+  card.querySelector('.quiz-question-input').value = 'Private question';
+  for (const [index,row] of card.querySelectorAll('.quiz-option-row').entries()) {
+    row.querySelector('.quiz-option-input').value = 'Choice ' + index;
+    row.querySelector('input[type="radio"]').checked = index === 2;
+  }
+}
+
+test('quiz editor opens only for instructors on the quiz route and uses manageable groups', async () => {
+  const ui = harness(mockWorkspace(1), '/quizzes'); await flush();
+  assert.equal(ui.get('quiz-creation-panel').hidden, false);
+  assert.equal(ui.get('quiz-questions').children.length, 1);
+  assert.equal(ui.get('quiz-group').children[0].value, '');
+  assert.equal(ui.get('quiz-group').children[1].value, '1');
+  await ui.select(2);
+  assert.equal(ui.get('quiz-creation-panel').hidden, true);
+  assert.equal(ui.get('quiz-questions').children.length, 0);
+});
+
+test('quiz form submits selected answer flags exactly once while saving', async () => {
+  const pending = deferred(); const writes = [];
+  const base = mockWorkspace(1);
+  const ui = harness(async (url, options = {}) => {
+    if (url === '/api/groups/1/quizzes') { writes.push(options); return pending.promise; }
+    return base(url, options);
+  }, '/quizzes');
+  await flush(); fillQuiz(ui);
+  const saving = ui.submitQuiz(); await ui.submitQuiz();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].headers['X-CSRF-Token'], 'csrf');
+  assert.deepEqual(JSON.parse(writes[0].body).questions[0].options.map(option => option.is_correct), [false,false,true,false]);
+  assert.equal(ui.get('quiz-title').disabled, true);
+  pending.resolve(response(201, {quiz:{message:'Quiz created successfully.'}})); await saving;
+  assert.equal(ui.get('create-quiz-status').textContent, 'Quiz created successfully.');
+  assert.equal(ui.get('create-quiz-button').disabled, false);
+});
+
+test('account switch clears quiz drafts and ignores a previous account pending save response', async () => {
+  const pending = deferred(); const base = mockWorkspace(1);
+  const ui = harness(async (url, options) => url === '/api/groups/1/quizzes' ? pending.promise : base(url, options), '/quizzes');
+  await flush(); fillQuiz(ui); const saving = ui.submitQuiz(); await ui.select(2);
+  assert.equal(ui.get('quiz-title').value, '');
+  assert.equal(ui.get('quiz-questions').children.length, 0);
+  pending.resolve(response(201, {quiz:{message:'Old instructor success'}})); await saving;
+  assert.equal(ui.get('create-quiz-status').textContent, '');
+  assert.equal(ui.document.body.dataset.role, 'student');
+});
+
+test('failed dashboard refresh removes private quiz authoring data', async () => {
+  let expired = false; const base = mockWorkspace(1);
+  const ui = harness(async (url, options) => expired && url === '/api/session' ? response(401,{error:'Expired'}) : base(url,options), '/quizzes');
+  await flush(); fillQuiz(ui); expired = true; await ui.refresh();
+  assert.equal(ui.get('quiz-title').value, '');
+  assert.equal(ui.get('quiz-questions').children.length, 0);
+  assert.equal(ui.get('quiz-creation-panel').hidden, true);
 });

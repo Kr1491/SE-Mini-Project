@@ -38,6 +38,16 @@
     byId('signed-out').hidden = true;
     for (const id of ['dashboard-stats', 'study-groups', 'tools', 'dashboard-nav']) byId(id).replaceChildren();
     for (const id of ['profile-name', 'profile-email', 'profile-avatar', 'dashboard-title', 'dashboard-description', 'dashboard-role', 'updated-at']) byId(id).textContent = '';
+    byId('create-group-panel').hidden = true;
+    byId('quiz-creation-panel').hidden = true;
+    for (const id of ['group-name', 'group-description', 'quiz-title']) byId(id).value = '';
+    for (const id of ['create-group-status', 'create-quiz-status']) {
+      byId(id).textContent = ''; byId(id).classList.remove('error');
+    }
+    byId('quiz-questions').replaceChildren(); byId('quiz-group').replaceChildren();
+    byId('create-quiz-button').disabled = false; byId('add-quiz-question').disabled = false;
+    byId('quiz-title').disabled = false; byId('quiz-group').disabled = false;
+    quizQuestionCounter = 0;
     delete document.body.dataset.role;
   }
   function safeHref(value) {
@@ -74,10 +84,9 @@
     quizCreationPanel.hidden = !isQuizPage || data.role !== 'instructor';
 
     const quizGroupSelect = byId('quiz-group');
-    quizGroupSelect.replaceChildren(
-      node('option', '', 'Choose a study group')
-    );
-    quizGroupSelect.options[0].value = '';
+    const placeholder = node('option', '', 'Choose a study group');
+    placeholder.value = '';
+    quizGroupSelect.replaceChildren(placeholder);
 
     const manageableGroups = data.groups.filter(group => group.can_manage);
 
@@ -92,6 +101,7 @@
       option.disabled = true;
       quizGroupSelect.append(option);
     }
+    if (isQuizPage && data.role === 'instructor' && !byId('quiz-questions').children.length) addQuizQuestion();
     byId('groups-heading').textContent = data.group_heading;
     byId('groups-count').textContent = `${data.groups.length} ${data.groups.length === 1 ? 'group' : 'groups'}`;
     for (const group of data.groups) {
@@ -232,6 +242,7 @@
   let quizQuestionCounter = 0;
 
   function addQuizQuestion() {
+    if (!currentSession || currentSession.user.role !== 'instructor' || switching || byId('create-quiz-button').disabled || globalThis.location?.pathname !== '/quizzes') return;
     const questionNumber = ++quizQuestionCounter;
     const card = node('fieldset', 'quiz-question-card');
     card.dataset.question = String(questionNumber);
@@ -275,7 +286,6 @@
   }
 
   byId('add-quiz-question').addEventListener('click', addQuizQuestion);
-  addQuizQuestion();
 
   byId('create-quiz-form').addEventListener('submit', async event => {
     event.preventDefault();
@@ -286,6 +296,8 @@
 
     const form = event.currentTarget;
     const button = byId('create-quiz-button');
+    if (button.disabled || switching) return;
+    const token = revision;
     const message = byId('create-quiz-status');
     const groupId = Number(byId('quiz-group').value);
     const title = byId('quiz-title').value.trim();
@@ -325,6 +337,8 @@
     }
 
     button.disabled = true;
+    for (const id of ['quiz-group', 'quiz-title', 'add-quiz-question']) byId(id).disabled = true;
+    for (const card of questionCards) card.disabled = true;
 
     try {
       const result = await request(`/api/groups/${groupId}/quizzes`, {
@@ -332,18 +346,26 @@
         body: JSON.stringify({title, questions})
       });
 
+      if (token !== revision) return;
       form.reset();
       byId('quiz-questions').replaceChildren();
       quizQuestionCounter = 0;
+      button.disabled = false;
       addQuizQuestion();
 
       message.textContent = result.quiz.message || 'Quiz created successfully.';
       message.classList.remove('error');
     } catch (error) {
-      message.textContent = error.message;
-      message.classList.add('error');
+      if (token === revision) {
+        message.textContent = error.message;
+        message.classList.add('error');
+      }
     } finally {
-      button.disabled = false;
+      if (token === revision) {
+        button.disabled = false;
+        for (const id of ['quiz-group', 'quiz-title', 'add-quiz-question']) byId(id).disabled = false;
+        for (const card of byId('quiz-questions').children) card.disabled = false;
+      }
     }
   });
 
