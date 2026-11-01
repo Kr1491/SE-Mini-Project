@@ -36,7 +36,10 @@
     byId('dashboard-content').hidden = true;
     byId('profile').hidden = true;
     byId('signed-out').hidden = true;
-    for (const id of ['dashboard-stats', 'study-groups', 'tools', 'dashboard-nav']) byId(id).replaceChildren();
+    for (const id of ['dashboard-stats', 'study-groups', 'tools', 'dashboard-nav', 'group-quizzes']) {
+        byId(id).replaceChildren();
+      }
+    byId('quiz-list-count').textContent = '';
     for (const id of ['profile-name', 'profile-email', 'profile-avatar', 'dashboard-title', 'dashboard-description', 'dashboard-role', 'updated-at']) byId(id).textContent = '';
     byId('create-group-panel').hidden = true;
     byId('quiz-creation-panel').hidden = true;
@@ -126,7 +129,116 @@
     byId('signed-out').hidden = true;
     byId('dashboard-content').hidden = false;
   }
+  async function loadGroupQuizzes(groups, role, token) {
+    const container = byId('group-quizzes');
+    const count = byId('quiz-list-count');
+
+    container.replaceChildren();
+
+    let total = 0;
+
+    for (const group of groups) {
+        if (token !== revision) return;
+
+        try {
+            const data = await request(`/api/groups/${group.id}/quizzes`);
+
+            if (token !== revision) return;
+
+            for (const quiz of data.quizzes) {
+                total++;
+
+                const card = node('article', 'quiz-card');
+                const heading = node('div', 'quiz-card-heading');
+
+                heading.append(node('h3', '', quiz.title));
+
+                const statusLabel = node(
+                    'span',
+                    `quiz-status ${quiz.status}`,
+                    quiz.status
+                );
+
+                heading.append(statusLabel);
+
+                card.append(
+                    heading,
+                    node(
+                        'p',
+                        '',
+                        `${group.name} · ${quiz.questions.length} questions`
+                    )
+                );
+
+                const canPublish =
+                    quiz.status === 'draft' &&
+                    (
+                        role === 'administrator' ||
+                        (role === 'instructor' && group.can_manage)
+                    );
+
+                if (canPublish) {
+                    const button = node(
+                        'button',
+                        'secondary-button',
+                        'Publish quiz'
+                    );
+
+                    button.type = 'button';
+
+                    button.addEventListener('click', async () => {
+                        button.disabled = true;
+
+                        try {
+                            await request(
+                                `/api/quizzes/${quiz.id}/publish`,
+                                {
+                                    method: 'POST',
+                                    body: '{}'
+                                }
+                            );
+
+                            await loadGroupQuizzes(groups, role, token);
+                        } catch (error) {
+                            button.disabled = false;
+                            card.append(
+                                node('p', 'quiz-error', error.message)
+                            );
+                        }
+                    });
+
+                    card.append(button);
+                }
+
+                container.append(card);
+            }
+        } catch (error) {
+            if (error.status !== 403) {
+                container.append(
+                    node('p', 'quiz-error', `Could not load quizzes for ${group.name}.`)
+                );
+            }
+        }
+    }
+
+    if (token !== revision) return;
+
+    count.textContent = `${total} ${total === 1 ? 'quiz' : 'quizzes'}`;
+
+    if (total === 0) {
+        container.append(
+            node(
+                'p',
+                'empty-state',
+                role === 'student'
+                    ? 'No published quizzes are available yet.'
+                    : 'No quizzes are available yet.'
+            )
+        );
+    }
+}
   async function load(token) {
+
     clearWorkspace(); status('Loading your workspace…');
     try {
       const authenticated = await request('/api/session');
@@ -134,7 +246,10 @@
       currentSession = authenticated;
       const data = await request(dashboardApi);
       if (token !== revision) return false;
-      render(data); status('');
+      render(data);
+      await loadGroupQuizzes(data.groups, data.role, token);
+      if (token !== revision) return false;
+      status('');
       return true;
     } catch (error) {
       if (token !== revision) return false;
@@ -355,6 +470,19 @@
 
       message.textContent = result.quiz.message || 'Quiz created successfully.';
       message.classList.remove('error');
+      try {
+        const dashboardData = await request(dashboardApi);
+
+        if (token !== revision) return;
+
+        await loadGroupQuizzes(
+          dashboardData.groups,
+          dashboardData.role,
+          token
+        );
+      } catch (refreshError) {
+        console.error('Could not refresh quiz list:', refreshError);
+      }
     } catch (error) {
       if (token === revision) {
         message.textContent = error.message;

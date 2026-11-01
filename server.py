@@ -24,7 +24,7 @@ from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_s
 
 from study_platform.dashboard import build_dashboard, require_dashboard_role
 from study_platform.admin_users import require_administrator, list_users, update_user_access, query_options as admin_query_options, integer as admin_integer
-from study_platform.quizzes import create_quiz, list_group_quizzes
+from study_platform.quizzes import create_quiz, list_group_quizzes, publish_quiz
 
 ROOT = Path(__file__).resolve().parent
 
@@ -309,6 +309,7 @@ class Handler(BaseHTTPRequestHandler):
                     db.commit()
                     return self.json(201, {'folder': folder})
             quiz_route = re.fullmatch(r'/api/groups/([1-9][0-9]*)/quizzes', path)
+            quiz_route = re.fullmatch(r'/api/groups/([1-9][0-9]*)/quizzes', path)
             if quiz_route:
                 group_id = parse_group_id(quiz_route[1])
                 if method == 'GET':
@@ -318,6 +319,13 @@ class Handler(BaseHTTPRequestHandler):
                     result = create_quiz(db, user, group_id, self.body())
                     db.commit()
                     return self.json(201, {'quiz': result})
+
+            publish_route = re.fullmatch(r'/api/quizzes/([1-9][0-9]*)/publish', path)
+            if publish_route and method == 'POST':
+                quiz_id = int(publish_route[1])
+                result = publish_quiz(db, user, quiz_id)
+                db.commit()
+                return self.json(200, {'quiz': result})
 
             permission_routes = {
                 '/api/access/instructor': 'instructor.summary',

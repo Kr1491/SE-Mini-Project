@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS quizzes (
     group_id INTEGER NOT NULL REFERENCES study_groups(id),
     created_by INTEGER NOT NULL REFERENCES users(id),
     title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 160),
+    status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'published')),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -197,6 +198,14 @@ def initialize(path):
     _secure_database(path)
     with connect(path) as db:
         db.executescript(SCHEMA + AUDIT_SCHEMA + QUIZ_SCHEMA)
+        quiz_columns = {
+            row['name'] for row in db.execute('PRAGMA table_info(quizzes)')
+        }
+        if 'status' not in quiz_columns:
+            db.execute(
+                "ALTER TABLE quizzes ADD COLUMN status TEXT NOT NULL "
+                "DEFAULT 'draft' CHECK(status IN ('draft', 'published'))"
+            )
         user_columns = {row['name'] for row in db.execute('PRAGMA table_info(users)')}
         if 'access_version' not in user_columns:
             db.execute('ALTER TABLE users ADD COLUMN access_version INTEGER NOT NULL DEFAULT 0 CHECK(access_version>=0)')
