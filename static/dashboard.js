@@ -209,6 +209,40 @@
 
                     card.append(button);
                 }
+                if (role === 'student' && quiz.status === 'published') {
+                    const button = node(
+                        'button',
+                        'primary-button',
+                        'Start Quiz'
+                    );
+
+                    button.type = 'button';
+
+                    button.addEventListener('click', async () => {
+                        button.disabled = true;
+
+                        try {
+                            const attempt = await request(
+                                `/api/quizzes/${quiz.id}/attempts`,
+                                {
+                                    method: 'POST',
+                                    body: '{}'
+                                }
+                            );
+
+                            if (token !== revision) return;
+
+                            showQuizAttempt(attempt);
+                        } catch (error) {
+                            button.disabled = false;
+                            card.append(
+                                node('p', 'quiz-error', error.message)
+                            );
+                        }
+                    });
+
+                    card.append(button);
+                }
 
                 container.append(card);
             }
@@ -237,6 +271,98 @@
         );
     }
 }
+function showQuizAttempt(attempt) {
+      const quizList = byId('group-quizzes');
+      const panel = byId('quiz-attempt-panel');
+      const title = byId('attempt-quiz-title');
+      const questionsContainer = byId('attempt-questions');
+      const form = byId('quiz-attempt-form');
+      const message = byId('attempt-message');
+      const submitButton = byId('submit-quiz-attempt');
+      const closeButton = byId('close-quiz-attempt');
+
+      quizList.hidden = true;
+      panel.hidden = false;
+
+      title.textContent = attempt.quiz.title;
+      message.textContent = '';
+      questionsContainer.replaceChildren();
+      submitButton.disabled = false;
+
+      for (const [index, question] of attempt.quiz.questions.entries()) {
+          const fieldset = document.createElement('fieldset');
+          fieldset.className = 'attempt-question';
+
+          const legend = document.createElement('legend');
+          legend.textContent = `${index + 1}. ${question.question}`;
+          fieldset.append(legend);
+
+          for (const option of question.options) {
+              const label = document.createElement('label');
+              label.className = 'attempt-option';
+
+              const input = document.createElement('input');
+              input.type = 'radio';
+              input.name = `question-${question.id}`;
+              input.value = option.id;
+
+              label.append(
+                  input,
+                  document.createTextNode(` ${option.text}`)
+              );
+
+              fieldset.append(label);
+          }
+
+          questionsContainer.append(fieldset);
+      }
+
+      closeButton.onclick = () => {
+          panel.hidden = true;
+          quizList.hidden = false;
+      };
+
+      form.onsubmit = async (event) => {
+          event.preventDefault();
+
+          const answers = [];
+
+          for (const question of attempt.quiz.questions) {
+              const selected = form.querySelector(
+                  `input[name="question-${question.id}"]:checked`
+              );
+
+              if (selected) {
+                  answers.push({
+                      question_id: question.id,
+                      option_id: Number(selected.value)
+                  });
+              }
+          }
+
+          submitButton.disabled = true;
+          message.textContent = 'Submitting your answers...';
+
+          try {
+              await request(
+                  `/api/quiz-attempts/${attempt.attempt_id}/submit`,
+                  {
+                      method: 'POST',
+                      body: JSON.stringify({ answers })
+                  }
+              );
+
+              message.textContent = 'Your quiz has been submitted successfully!';
+              questionsContainer.querySelectorAll('input').forEach(input => {
+                  input.disabled = true;
+              });
+          } catch (error) {
+              message.textContent = error.message;
+              submitButton.disabled = false;
+          }
+      };
+  }
+
   async function load(token) {
 
     clearWorkspace(); status('Loading your workspace…');

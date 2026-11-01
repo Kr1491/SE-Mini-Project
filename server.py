@@ -24,7 +24,13 @@ from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_s
 
 from study_platform.dashboard import build_dashboard, require_dashboard_role
 from study_platform.admin_users import require_administrator, list_users, update_user_access, query_options as admin_query_options, integer as admin_integer
-from study_platform.quizzes import create_quiz, list_group_quizzes, publish_quiz
+from study_platform.quizzes import (
+    create_quiz,
+    list_group_quizzes,
+    publish_quiz,
+    start_quiz_attempt,
+    submit_quiz_attempt,
+)
 
 ROOT = Path(__file__).resolve().parent
 
@@ -326,6 +332,22 @@ class Handler(BaseHTTPRequestHandler):
                 result = publish_quiz(db, user, quiz_id)
                 db.commit()
                 return self.json(200, {'quiz': result})
+
+            attempt_route = re.fullmatch(r'/api/quizzes/([1-9][0-9]*)/attempts', path)
+            if attempt_route and method == 'POST':
+                quiz_id = int(attempt_route[1])
+                result = start_quiz_attempt(db, user, quiz_id)
+                db.commit()
+                return self.json(201, result)
+
+            submit_attempt_route = re.fullmatch(
+                r'/api/quiz-attempts/([1-9][0-9]*)/submit', path
+            )
+            if submit_attempt_route and method == 'POST':
+                attempt_id = int(submit_attempt_route[1])
+                result = submit_quiz_attempt(db, user, attempt_id, self.body())
+                db.commit()
+                return self.json(200, result)
 
             permission_routes = {
                 '/api/access/instructor': 'instructor.summary',

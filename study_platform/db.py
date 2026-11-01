@@ -175,6 +175,27 @@ CREATE TABLE IF NOT EXISTS quiz_options (
 CREATE INDEX IF NOT EXISTS quizzes_group ON quizzes(group_id);
 CREATE INDEX IF NOT EXISTS quiz_questions_quiz ON quiz_questions(quiz_id);
 CREATE INDEX IF NOT EXISTS quiz_options_question ON quiz_options(question_id);
+
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id INTEGER PRIMARY KEY,
+    quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+    student_id INTEGER NOT NULL REFERENCES users(id),
+    started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    submitted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS quiz_attempt_answers (
+    attempt_id INTEGER NOT NULL REFERENCES quiz_attempts(id) ON DELETE CASCADE,
+    question_id INTEGER NOT NULL REFERENCES quiz_questions(id) ON DELETE CASCADE,
+    option_id INTEGER NOT NULL REFERENCES quiz_options(id),
+    PRIMARY KEY (attempt_id, question_id)
+);
+
+CREATE INDEX IF NOT EXISTS quiz_attempts_student
+ON quiz_attempts(student_id);
+
+CREATE INDEX IF NOT EXISTS quiz_attempts_quiz
+ON quiz_attempts(quiz_id);
 """
 
 
