@@ -210,9 +210,18 @@ class QuizTests(unittest.TestCase):
         )
         self.assertEqual(status, 201)
 
+        quiz_id = created['quiz']['id']
+
+        # Instructor publishes the quiz.
+        status, published = self.request(
+            'POST', f'/api/quizzes/{quiz_id}/publish', {}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(published['quiz']['status'], 'published')
+
+        # Student can now view the published quiz.
         self.login_sample(2)
         status, result = self.request('GET', '/api/groups/1/quizzes')
-
         self.assertEqual(status, 200)
         self.assertEqual(len(result['quizzes']), 1)
 
@@ -226,6 +235,73 @@ class QuizTests(unittest.TestCase):
                 self.assertIn('id', option)
                 self.assertIn('text', option)
                 self.assertNotIn('is_correct', option)
+
+    def test_student_cannot_view_unpublished_quiz(self):
+        self.login_sample(1)
+
+        status, created = self.request(
+            'POST', '/api/groups/1/quizzes', self.valid_quiz()
+        )
+        self.assertEqual(status, 201)
+
+        self.login_sample(2)
+        status, result = self.request('GET', '/api/groups/1/quizzes')
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(result['quizzes']), 0)
+
+    def test_student_cannot_publish_quiz(self):
+        self.login_sample(1)
+
+        status, created = self.request(
+            'POST', '/api/groups/1/quizzes', self.valid_quiz()
+        )
+        self.assertEqual(status, 201)
+
+        quiz_id = created['quiz']['id']
+
+        self.login_sample(2)
+        status, _ = self.request(
+            'POST', f'/api/quizzes/{quiz_id}/publish', {}
+        )
+
+        self.assertEqual(status, 403)
+
+    def test_incomplete_quiz_cannot_be_published(self):
+        self.login_sample(1)
+
+        status, created = self.request(
+            'POST', '/api/groups/1/quizzes', self.valid_quiz()
+        )
+        self.assertEqual(status, 201)
+
+        quiz_id = created['quiz']['id']
+
+        # Simulate an incomplete quiz by removing an option.
+        with connect(self.database) as db:
+            question_id = db.execute(
+                'SELECT id FROM quiz_questions WHERE quiz_id=? ORDER BY position LIMIT 1',
+                (quiz_id,)
+            ).fetchone()['id']
+
+            db.execute(
+                'DELETE FROM quiz_options WHERE question_id=? '
+                'AND id=(SELECT MAX(id) FROM quiz_options WHERE question_id=?)',
+                (question_id, question_id)
+            )
+
+        status, _ = self.request(
+            'POST', f'/api/quizzes/{quiz_id}/publish', {}
+        )
+
+        self.assertEqual(status, 400)
+
+        with connect(self.database) as db:
+            quiz = db.execute(
+                'SELECT status FROM quizzes WHERE id=?', (quiz_id,)
+            ).fetchone()
+
+            self.assertEqual(quiz['status'], 'draft')
 
     def test_student_cannot_view_quizzes_from_another_group(self):
         self.login_sample(4)

@@ -120,18 +120,112 @@ def create_quiz(db, user, group_id, data):
     }
 
 
+def publish_quiz(db, user, quiz_id):
+    """Publish a complete quiz after verifying instructor access."""
+    require_permission(user, 'quiz.create')
+
+    if not db.in_transaction:
+        db.execute('BEGIN IMMEDIATE')
+
+    current = db.execute(
+        'SELECT id, role, is_active FROM users WHERE id=?',
+        (user['id'],)
+    ).fetchone()
+
+    if current is None or not current['is_active']:
+        raise APIError(401, 'Your account is unavailable. Sign in again.')
+
+    require_permission(current, 'quiz.create')
+
+    quiz = db.execute(
+        'SELECT id, group_id, title, status FROM quizzes WHERE id=?',
+        (quiz_id,)
+    ).fetchone()
+
+    if quiz is None:
+        raise APIError(404, 'Quiz not found.')
+
+    group_access(db, current, quiz['group_id'], manage=True)
+
+    questions = db.execute(
+        '''SELECT id, question_text
+           FROM quiz_questions
+           WHERE quiz_id=?
+           ORDER BY position''',
+        (quiz_id,)
+    ).fetchall()
+
+    if not questions:
+        raise APIError(400, 'Add at least one question before publishing.')
+
+    for index, question in enumerate(questions, start=1):
+        if not question['question_text'].strip():
+            raise APIError(400, f'Question {index} is incomplete.')
+
+        options = db.execute(
+            '''SELECT option_text, is_correct
+               FROM quiz_options
+               WHERE question_id=?
+               ORDER BY id''',
+            (question['id'],)
+        ).fetchall()
+
+        if not 2 <= len(options) <= 20:
+            raise APIError(
+                400, f'Question {index} must have between two and twenty options.'
+            )
+
+        if any(not option['option_text'].strip() for option in options):
+            raise APIError(400, f'Question {index} has an empty option.')
+
+        if sum(option['is_correct'] for option in options) != 1:
+            raise APIError(
+                400, f'Question {index} must have exactly one correct answer.'
+            )
+
+    db.execute(
+        "UPDATE quizzes SET status='published' WHERE id=?",
+        (quiz_id,)
+    )
+
+    return {
+        'id': quiz['id'],
+        'group_id': quiz['group_id'],
+        'title': quiz['title'],
+        'status': 'published',
+        'message': 'Quiz published successfully.'
+    }
+
+
 def list_group_quizzes(db, user, group_id):
-    """Return group quizzes without exposing correct-answer information."""
+    """Return quizzes the current user is allowed to see."""
     require_permission(user, 'groups.read')
     group = group_access(db, user, group_id)
 
-    quizzes = db.execute(
-        '''SELECT id, title, created_at
-           FROM quizzes
-           WHERE group_id = ?
-           ORDER BY id''',
-        (group_id,)
-    ).fetchall()
+    can_manage = (
+        user['role'] == 'administrator'
+        or (
+            user['role'] == 'instructor'
+            and group['created_by'] == user['id']
+        )
+    )
+
+    if can_manage:
+        quizzes = db.execute(
+            '''SELECT id, title, status, created_at
+               FROM quizzes
+               WHERE group_id = ?
+               ORDER BY id''',
+            (group_id,)
+        ).fetchall()
+    else:
+        quizzes = db.execute(
+            '''SELECT id, title, status, created_at
+               FROM quizzes
+               WHERE group_id = ? AND status = 'published'
+               ORDER BY id''',
+            (group_id,)
+        ).fetchall()
 
     results = []
 
@@ -167,6 +261,7 @@ def list_group_quizzes(db, user, group_id):
         results.append({
             'id': quiz['id'],
             'title': quiz['title'],
+            'status': quiz['status'],
             'questions': question_results
         })
 
