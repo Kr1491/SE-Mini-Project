@@ -24,6 +24,7 @@ from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_s
 
 from study_platform.dashboard import build_dashboard, require_dashboard_role
 from study_platform.admin_users import require_administrator, list_users, update_user_access, query_options as admin_query_options, integer as admin_integer
+from study_platform.quizzes import create_quiz, list_group_quizzes
 
 ROOT = Path(__file__).resolve().parent
 
@@ -141,6 +142,7 @@ class Handler(BaseHTTPRequestHandler):
             '/': ('dashboard.html', 'text/html; charset=utf-8'),
             '/dashboard': ('dashboard.html', 'text/html; charset=utf-8'),
             '/dashboard/': ('dashboard.html', 'text/html; charset=utf-8'),
+            '/quizzes': ('dashboard.html', 'text/html; charset=utf-8'),
             '/access': ('index.html', 'text/html; charset=utf-8'),
             '/dashboard.js': ('dashboard.js', 'text/javascript; charset=utf-8'),
             '/dashboard.css': ('dashboard.css', 'text/css; charset=utf-8'),
@@ -306,6 +308,17 @@ class Handler(BaseHTTPRequestHandler):
                     # Make the folder visible before the client receives success.
                     db.commit()
                     return self.json(201, {'folder': folder})
+            quiz_route = re.fullmatch(r'/api/groups/([1-9][0-9]*)/quizzes', path)
+            if quiz_route:
+                group_id = parse_group_id(quiz_route[1])
+                if method == 'GET':
+                    result = list_group_quizzes(db, user, group_id)
+                    return self.json(200, result)
+                if method == 'POST':
+                    result = create_quiz(db, user, group_id, self.body())
+                    db.commit()
+                    return self.json(201, {'quiz': result})
+
             permission_routes = {
                 '/api/access/instructor': 'instructor.summary',
                 '/api/access/admin': 'admin.summary',

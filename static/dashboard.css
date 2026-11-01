@@ -59,3 +59,73 @@
 #create-group-status.error {
   color: #9b3932;
 }
+
+/* Quiz creation */
+#create-quiz-form {
+  display: grid;
+  gap: 12px;
+  max-width: 720px;
+  margin-top: 18px;
+}
+
+#create-quiz-form > label {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+#create-quiz-form input[type="text"],
+#create-quiz-form textarea,
+#create-quiz-form select {
+  width: 100%;
+  padding: 11px 12px;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font: inherit;
+}
+
+.quiz-question-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfdfb;
+}
+
+.quiz-question-card legend {
+  padding: 0 7px;
+  font-weight: 700;
+  color: var(--teal);
+}
+
+.quiz-question-input {
+  min-height: 75px;
+  resize: vertical;
+}
+
+.quiz-options {
+  display: grid;
+  gap: 9px;
+}
+
+.quiz-option-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quiz-option-row input[type="radio"] {
+  accent-color: var(--teal);
+}
+
+.quiz-option-row .quiz-option-input {
+  flex: 1;
+  min-width: 0;
+}
+
+#create-quiz-status.error {
+  color: #9b3932;
+}

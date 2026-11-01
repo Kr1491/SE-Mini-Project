@@ -78,7 +78,13 @@ def build_dashboard(db, user, *, features=None):
             'instructor': ['quiz_creation', 'performance'],
             'administrator': ['user_management']}[role]
     actions = [group_action, folder_action, material_action]
-    actions.extend({'key': key, 'label': upcoming[key][0], 'description': upcoming[key][1], 'available': False, 'href': None} for key in keys)
+    actions.extend({
+        'key': key,
+        'label': upcoming[key][0],
+        'description': upcoming[key][1],
+        'available': key == 'quiz_creation' and role in ('instructor', 'administrator'),
+        'href': '/quizzes' if key == 'quiz_creation' and role in ('instructor', 'administrator') else None
+    } for key in keys)
     if role == 'administrator' and (features or {}).get('user_management'):
         action = next(item for item in actions if item['key'] == 'user_management')
         action.update(available=True, href='/admin/users')
