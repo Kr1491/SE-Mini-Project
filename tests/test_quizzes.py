@@ -360,6 +360,140 @@ class QuizTests(unittest.TestCase):
             with connect(self.database) as db:
                 create_quiz(db,{'id':1,'role':'instructor'},1,self.valid_quiz())
         self.assertEqual(error.exception.status,403)
+    def test_student_can_start_published_quiz_without_correct_answers(self):
+        self.login_sample(1)
+        status, created = self.request(
+            'POST', '/api/groups/1/quizzes', self.valid_quiz()
+        )
+        self.assertEqual(status, 201)
+
+        quiz_id = created['quiz']['id']
+        status, _ = self.request(
+            'POST', f'/api/quizzes/{quiz_id}/publish'
+        )
+        self.assertEqual(status, 200)
+
+        self.login_sample(2)
+
+        status, result = self.request(
+            'POST', f'/api/quizzes/{quiz_id}/attempts'
+        )
+
+        self.assertEqual(status, 201)
+        self.assertIn('attempt_id', result)
+        self.assertEqual(result['quiz']['title'], 'Database Fundamentals')
+
+        for question in result['quiz']['questions']:
+            for option in question['options']:
+                self.assertNotIn('is_correct', option)
+
+    def test_student_cannot_start_draft_quiz(self):
+        self.login_sample(1)
+
+        status, created = self.request(
+            'POST', '/api/groups/1/quizzes', self.valid_quiz()
+        )
+        self.assertEqual(status, 201)
+
+        quiz_id = created['quiz']['id']
+        self.login_sample(2)
+
+        status, _ = self.request(
+            'POST', f'/api/quizzes/{quiz_id}/attempts'
+        )
+
+        self.assertEqual(status, 404)
+
+    def test_student_can_submit_quiz_answers(self):
+        self.login_sample(1)
+
+        status, created = self.request(
+            'POST', '/api/groups/1/quizzes', self.valid_quiz()
+        )
+        self.assertEqual(status, 201)
+
+        quiz_id = created['quiz']['id']
+
+        status, _ = self.request(
+            'POST', f'/api/quizzes/{quiz_id}/publish'
+        )
+        self.assertEqual(status, 200)
+
+        self.login_sample(2)
+
+        status, started = self.request(
+            'POST', f'/api/quizzes/{quiz_id}/attempts'
+        )
+        self.assertEqual(status, 201)
+
+        answers = [
+            {
+                'question_id': question['id'],
+                'option_id': question['options'][0]['id']
+            }
+            for question in started['quiz']['questions']
+        ]
+
+        status, result = self.request(
+            'POST',
+            f"/api/quiz-attempts/{started['attempt_id']}/submit",
+            {'answers': answers}
+        )
+
+        self.assertEqual(status, 200)
+        self.assertTrue(result['submitted'])
+    def test_student_cannot_start_quiz_from_another_group(self):
+        self.login_sample(1)
+
+        status, created = self.request(
+            'POST', '/api/groups/1/quizzes', self.valid_quiz()
+        )
+        self.assertEqual(status, 201)
+
+        quiz_id = created['quiz']['id']
+
+        self.request('POST', f'/api/quizzes/{quiz_id}/publish')
+
+        # Log in as a student who does not belong to this group.
+        self.login_sample(3)
+
+        status, _ = self.request(
+            'POST', f'/api/quizzes/{quiz_id}/attempts'
+        )
+
+        self.assertEqual(status, 403)
+
+    def test_student_cannot_submit_another_students_attempt(self):
+        self.login_sample(1)
+
+        status, created = self.request(
+            'POST', '/api/groups/1/quizzes', self.valid_quiz()
+        )
+        self.assertEqual(status, 201)
+
+        quiz_id = created['quiz']['id']
+        self.request('POST', f'/api/quizzes/{quiz_id}/publish')
+
+        self.login_sample(2)
+
+        status, started = self.request(
+            'POST', f'/api/quizzes/{quiz_id}/attempts'
+        )
+        self.assertEqual(status, 201)
+
+        attempt_id = started['attempt_id']
+
+        # Switch to a different student.
+        self.login_sample(3)
+
+        status, _ = self.request(
+            'POST',
+            f'/api/quiz-attempts/{attempt_id}/submit',
+            {'answers': []}
+        )
+
+        self.assertEqual(status, 403)
+
 
     def test_quiz_and_upload_recovery_schemas_coexist(self):
         from study_platform.recovery import create_backup,restore_backup
