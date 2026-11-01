@@ -268,7 +268,10 @@ test('quiz form submits selected answer flags exactly once while saving', async 
   const pending = deferred(); const writes = [];
   const base = mockWorkspace(1);
   const ui = harness(async (url, options = {}) => {
-    if (url === '/api/groups/1/quizzes') { writes.push(options); return pending.promise; }
+    if (url === '/api/groups/1/quizzes' && options.method === 'POST') {
+        writes.push(options);
+        return pending.promise;
+    }
     return base(url, options);
   }, '/quizzes');
   await flush(); fillQuiz(ui);
@@ -284,7 +287,10 @@ test('quiz form submits selected answer flags exactly once while saving', async 
 
 test('account switch clears quiz drafts and ignores a previous account pending save response', async () => {
   const pending = deferred(); const base = mockWorkspace(1);
-  const ui = harness(async (url, options) => url === '/api/groups/1/quizzes' ? pending.promise : base(url, options), '/quizzes');
+  const ui = harness(async (url, options = {}) =>
+  url === '/api/groups/1/quizzes' && options.method === 'POST'
+    ? pending.promise
+    : base(url, options), '/quizzes');
   await flush(); fillQuiz(ui); const saving = ui.submitQuiz(); await ui.select(2);
   assert.equal(ui.get('quiz-title').value, '');
   assert.equal(ui.get('quiz-questions').children.length, 0);

@@ -247,8 +247,12 @@
       const data = await request(dashboardApi);
       if (token !== revision) return false;
       render(data);
-      await loadGroupQuizzes(data.groups, data.role, token);
-      if (token !== revision) return false;
+      loadGroupQuizzes(data.groups, data.role, token).catch(error => {
+        if (token === revision) {
+          console.error('Could not load group quizzes:', error);
+        }
+      });
+
       status('');
       return true;
     } catch (error) {
