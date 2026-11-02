@@ -224,3 +224,5 @@
 .quiz-attempt-panel[hidden] {
     display: none;
 }
+
+.attempt-confirmation{padding:17px;margin-top:18px;border:1px solid #c5d8cc;background:#edf4ed;border-radius:9px}.attempt-confirmation p{font-size:13px;color:#19332f;margin:0 0 12px}.attempt-confirmation button{margin:3px 8px 3px 0}.attempt-result{padding:23px;margin-top:20px;background:#e7f1e9;border:1px solid #bdd5c5;border-radius:10px}.attempt-result h3{font-size:15px;margin:0 0 8px}#attempt-score{display:block;color:#176f61;font-size:34px;line-height:1.2}#attempt-result-summary{font-size:13px;color:#4d6258;margin:11px 0 0}#attempt-message.error{color:#9b3932}.attempt-option:has(input:disabled){cursor:default;opacity:.8}.attempt-option:has(input:checked){background:#e7f1e9}.attempt-question input:focus-visible{outline:3px solid #b5751a;outline-offset:4px}

@@ -151,3 +151,10 @@ The duplicate upload material schema has been reconciled with the viewer schema.
 The additive `users.access_version` starts at zero and increments on actual role/status changes. Stale edits cannot overwrite a newer state. Successful changes delete all of the affected user's sessions and insert `user_access_audit` with the actor/target IDs, old/new role/access and UTC change timestamp. These writes commit together before success is returned; an audit failure rolls the entire change back. Reactivation requires fresh sign-in and never restores old tokens. No-op requests neither revoke sessions nor create audit entries.
 
 Permissions continue to derive from the existing role mapping and group ownership/membership. This feature does not add arbitrary individual permission overrides, password/account deletion operations, or group ownership transfers. Existing account data is preserved by initialization. The audit table remains private database data; it is not exposed to student/instructor responses.
+
+
+## Issue #16 — submission scoring
+
+The merged #15 routes are preserved. New attempts freeze a private grading snapshot in `quiz_attempts.grading_snapshot`; the start response omits answer keys. `POST /api/quiz-attempts/{id}/submit` now grades MCQs on the server, saves selected answers and one `quiz_attempt_results` row atomically, and returns a private receipt. Concurrent/altered retries return the original result. `GET /api/quiz-attempts/{id}/result` is restricted to the current Student's owned, in-scope attempt. Correct = 1, wrong/unanswered = 0, with all frozen questions in the total.
+
+Legacy attempts/answers are preserved. Old active attempts with no snapshot require a fresh start; old completed submissions return no recorded score rather than a fabricated zero. The schema, receipt shape, snapshot policy and #17 handoff are documented in [issue-16-integration.md](issue-16-integration.md). The #16 receipt screen is not a results-history/performance dashboard.

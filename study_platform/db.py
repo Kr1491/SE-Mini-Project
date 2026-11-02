@@ -5,6 +5,7 @@ import stat
 from contextlib import contextmanager
 from pathlib import Path
 from .admin_users import AUDIT_SCHEMA
+from .quiz_scoring import SCHEMA as SCORING_SCHEMA
 
 MATERIALS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS materials (
@@ -181,7 +182,8 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
     quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
     student_id INTEGER NOT NULL REFERENCES users(id),
     started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    submitted_at TEXT
+    submitted_at TEXT,
+    grading_snapshot TEXT
 );
 
 CREATE TABLE IF NOT EXISTS quiz_attempt_answers (
@@ -218,7 +220,10 @@ def _migrate_upload_idempotency(db):
 def initialize(path):
     _secure_database(path)
     with connect(path) as db:
-        db.executescript(SCHEMA + AUDIT_SCHEMA + QUIZ_SCHEMA)
+        db.executescript(SCHEMA + AUDIT_SCHEMA + QUIZ_SCHEMA + SCORING_SCHEMA)
+        attempt_columns = {row['name'] for row in db.execute('PRAGMA table_info(quiz_attempts)')}
+        if 'grading_snapshot' not in attempt_columns:
+            db.execute('ALTER TABLE quiz_attempts ADD COLUMN grading_snapshot TEXT')
         quiz_columns = {
             row['name'] for row in db.execute('PRAGMA table_info(quizzes)')
         }

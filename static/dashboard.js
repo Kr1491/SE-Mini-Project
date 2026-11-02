@@ -6,6 +6,7 @@
   let switching = false;
   let revision = 0;
   let currentSession = null;
+  let startingQuiz = false;
   const rolePath = (globalThis.location?.pathname || '').match(/^\/dashboard\/(student|instructor|administrator)$/);
   const dashboardApi = rolePath ? `/api/dashboard/${rolePath[1]}` : '/api/dashboard';
   function node(tag, className, text) {
@@ -32,6 +33,7 @@
     byId('dashboard-status').classList.toggle('error', error);
   }
   function clearWorkspace() {
+    globalThis.StudyQuizAttempt?.reset?.(); startingQuiz = false;
     document.title = 'StudySpace · Your workspace';
     byId('dashboard-content').hidden = true;
     byId('profile').hidden = true;
@@ -219,6 +221,8 @@
                     button.type = 'button';
 
                     button.addEventListener('click', async () => {
+                        if (button.disabled || switching || startingQuiz || token !== revision) return;
+                        startingQuiz = true;
                         button.disabled = true;
 
                         try {
@@ -234,10 +238,10 @@
 
                             showQuizAttempt(attempt);
                         } catch (error) {
-                            button.disabled = false;
-                            card.append(
-                                node('p', 'quiz-error', error.message)
-                            );
+                            if (token !== revision) return;
+                            card.append(node('p', 'quiz-error', error.message));
+                        } finally {
+                            if (token === revision) { startingQuiz = false; button.disabled = false; }
                         }
                     });
 
@@ -247,6 +251,7 @@
                 container.append(card);
             }
         } catch (error) {
+            if (token !== revision) return;
             if (error.status !== 403) {
                 container.append(
                     node('p', 'quiz-error', `Could not load quizzes for ${group.name}.`)
@@ -271,96 +276,12 @@
         );
     }
 }
-function showQuizAttempt(attempt) {
-      const quizList = byId('group-quizzes');
-      const panel = byId('quiz-attempt-panel');
-      const title = byId('attempt-quiz-title');
-      const questionsContainer = byId('attempt-questions');
-      const form = byId('quiz-attempt-form');
-      const message = byId('attempt-message');
-      const submitButton = byId('submit-quiz-attempt');
-      const closeButton = byId('close-quiz-attempt');
-
-      quizList.hidden = true;
-      panel.hidden = false;
-
-      title.textContent = attempt.quiz.title;
-      message.textContent = '';
-      questionsContainer.replaceChildren();
-      submitButton.disabled = false;
-
-      for (const [index, question] of attempt.quiz.questions.entries()) {
-          const fieldset = document.createElement('fieldset');
-          fieldset.className = 'attempt-question';
-
-          const legend = document.createElement('legend');
-          legend.textContent = `${index + 1}. ${question.question}`;
-          fieldset.append(legend);
-
-          for (const option of question.options) {
-              const label = document.createElement('label');
-              label.className = 'attempt-option';
-
-              const input = document.createElement('input');
-              input.type = 'radio';
-              input.name = `question-${question.id}`;
-              input.value = option.id;
-
-              label.append(
-                  input,
-                  document.createTextNode(` ${option.text}`)
-              );
-
-              fieldset.append(label);
-          }
-
-          questionsContainer.append(fieldset);
-      }
-
-      closeButton.onclick = () => {
-          panel.hidden = true;
-          quizList.hidden = false;
-      };
-
-      form.onsubmit = async (event) => {
-          event.preventDefault();
-
-          const answers = [];
-
-          for (const question of attempt.quiz.questions) {
-              const selected = form.querySelector(
-                  `input[name="question-${question.id}"]:checked`
-              );
-
-              if (selected) {
-                  answers.push({
-                      question_id: question.id,
-                      option_id: Number(selected.value)
-                  });
-              }
-          }
-
-          submitButton.disabled = true;
-          message.textContent = 'Submitting your answers...';
-
-          try {
-              await request(
-                  `/api/quiz-attempts/${attempt.attempt_id}/submit`,
-                  {
-                      method: 'POST',
-                      body: JSON.stringify({ answers })
-                  }
-              );
-
-              message.textContent = 'Your quiz has been submitted successfully!';
-              questionsContainer.querySelectorAll('input').forEach(input => {
-                  input.disabled = true;
-              });
-          } catch (error) {
-              message.textContent = error.message;
-              submitButton.disabled = false;
-          }
-      };
+  function showQuizAttempt(attempt) {
+    if (!globalThis.StudyQuizAttempt) throw new Error('The quiz screen could not load. Refresh the page and try again.');
+    globalThis.StudyQuizAttempt.open(attempt, {request, onDenied: error => {
+      ++revision; currentSession = null; clearWorkspace(); byId('signed-out').hidden = false;
+      status(error.message || 'Your quiz access has changed. Sign in again.', true);
+    }});
   }
 
   async function load(token) {

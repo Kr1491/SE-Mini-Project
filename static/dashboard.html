@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>StudySpace · Your workspace</title>
-<link rel="stylesheet" href="/dashboard.css"><script src="/dashboard.js" defer></script>
+<link rel="stylesheet" href="/dashboard.css"><script src="/quiz-attempt.js" defer></script><script src="/dashboard.js" defer></script>
 </head>
 <body>
 <div id="demo-banner" class="demo-banner" hidden>LOCAL DEMO <span>Sample accounts and groups. Choose a sample account to explore.</span></div>
@@ -43,13 +43,16 @@
     </div>
 
     <form id="quiz-attempt-form">
+        <p class="muted">Each question is worth 1 point. Wrong or unanswered questions receive 0 points.</p>
         <div id="attempt-questions"></div>
         <button id="submit-quiz-attempt" class="primary-button" type="submit">
             Submit answers
         </button>
     </form>
 
+    <div id="attempt-confirmation" class="attempt-confirmation" hidden><p id="attempt-confirmation-text" role="status"></p><button id="confirm-quiz-submit" class="primary-button" type="button">Confirm submission</button><button id="edit-quiz-answers" class="secondary-button" type="button">Keep editing</button></div>
     <p id="attempt-message" role="status" aria-live="polite"></p>
+    <section id="attempt-result" class="attempt-result" aria-labelledby="attempt-result-heading" hidden><p class="eyebrow">SUBMISSION SAVED</p><h3 id="attempt-result-heading" tabindex="-1">Your score</h3><strong id="attempt-score"></strong><p id="attempt-result-summary"></p></section>
 </section>
 </section>
 

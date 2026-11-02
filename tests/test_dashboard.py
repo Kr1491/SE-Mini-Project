@@ -143,7 +143,7 @@ class DashboardTests(unittest.TestCase):
             for key in ['quiz_attempts', 'results', 'quiz_creation', 'performance']:
                 action = next((a for a in data['actions'] if a['key'] == key), None)
                 if action:
-                    if key == 'quiz_creation' and uid == 1:
+                    if (key == 'quiz_creation' and uid == 1) or (key == 'quiz_attempts' and data['role'] == 'student'):
                         self.assertTrue(action['available'])
                         self.assertEqual(action['href'], '/quizzes')
                     else:
