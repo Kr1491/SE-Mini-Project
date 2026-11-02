@@ -23,6 +23,7 @@ from study_platform.folders import available_groups, list_folders, create_folder
 from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_session, current_session, group_access, require_permission
 
 from study_platform.dashboard import build_dashboard, require_dashboard_role
+from study_platform.quiz_scoring import get_result, parse_quiz_id
 from study_platform.admin_users import require_administrator, list_users, update_user_access, query_options as admin_query_options, integer as admin_integer
 from study_platform.quizzes import (
     create_quiz,
@@ -152,6 +153,7 @@ class Handler(BaseHTTPRequestHandler):
             '/access': ('index.html', 'text/html; charset=utf-8'),
             '/dashboard.js': ('dashboard.js', 'text/javascript; charset=utf-8'),
             '/dashboard.css': ('dashboard.css', 'text/css; charset=utf-8'),
+            '/quiz-attempt.js': ('quiz-attempt.js', 'text/javascript; charset=utf-8'),
             '/login': ('login.html', 'text/html; charset=utf-8'),
             '/login/': ('login.html', 'text/html; charset=utf-8'),
             '/login.js': ('login.js', 'text/javascript; charset=utf-8'),
@@ -315,7 +317,6 @@ class Handler(BaseHTTPRequestHandler):
                     db.commit()
                     return self.json(201, {'folder': folder})
             quiz_route = re.fullmatch(r'/api/groups/([1-9][0-9]*)/quizzes', path)
-            quiz_route = re.fullmatch(r'/api/groups/([1-9][0-9]*)/quizzes', path)
             if quiz_route:
                 group_id = parse_group_id(quiz_route[1])
                 if method == 'GET':
@@ -328,23 +329,27 @@ class Handler(BaseHTTPRequestHandler):
 
             publish_route = re.fullmatch(r'/api/quizzes/([1-9][0-9]*)/publish', path)
             if publish_route and method == 'POST':
-                quiz_id = int(publish_route[1])
+                quiz_id = parse_quiz_id(publish_route[1])
                 result = publish_quiz(db, user, quiz_id)
                 db.commit()
                 return self.json(200, {'quiz': result})
 
             attempt_route = re.fullmatch(r'/api/quizzes/([1-9][0-9]*)/attempts', path)
             if attempt_route and method == 'POST':
-                quiz_id = int(attempt_route[1])
+                quiz_id = parse_quiz_id(attempt_route[1])
                 result = start_quiz_attempt(db, user, quiz_id)
                 db.commit()
                 return self.json(201, result)
+
+            receipt_route = re.fullmatch(r'/api/quiz-attempts/([1-9][0-9]*)/result', path)
+            if receipt_route and method == 'GET':
+                return self.json(200, get_result(db, user, parse_quiz_id(receipt_route[1])))
 
             submit_attempt_route = re.fullmatch(
                 r'/api/quiz-attempts/([1-9][0-9]*)/submit', path
             )
             if submit_attempt_route and method == 'POST':
-                attempt_id = int(submit_attempt_route[1])
+                attempt_id = parse_quiz_id(submit_attempt_route[1])
                 result = submit_quiz_attempt(db, user, attempt_id, self.body())
                 db.commit()
                 return self.json(200, result)

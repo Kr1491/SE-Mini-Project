@@ -1,5 +1,7 @@
 """Quiz creation and question validation."""
 import sqlite3
+import json
+from .quiz_scoring import student_account, freeze_questions, public_questions, submit_attempt
 
 from .security import APIError, group_access, require_permission
 
@@ -269,161 +271,21 @@ def list_group_quizzes(db, user, group_id):
 
 
 def start_quiz_attempt(db, user, quiz_id):
-    """Start an attempt for a published quiz as an eligible student."""
-    if user['role'] != 'student':
-        raise APIError(403, 'Only students can attempt quizzes')
-
-    quiz = db.execute(
-        '''
-        SELECT q.id, q.group_id, q.title, q.status
-        FROM quizzes q
-        WHERE q.id = ?
-        ''',
-        (quiz_id,)
-    ).fetchone()
-
-    if not quiz or quiz['status'] != 'published':
-        raise APIError(404, 'Published quiz not found')
-
-    group_access(db, user, quiz['group_id'])
-
-    cursor = db.execute(
-        '''
-        INSERT INTO quiz_attempts (quiz_id, student_id)
-        VALUES (?, ?)
-        ''',
-        (quiz_id, user['id'])
-    )
-
-    attempt_id = cursor.lastrowid
-
-    questions = db.execute(
-        '''
-        SELECT id, question_text
-        FROM quiz_questions
-        WHERE quiz_id = ?
-        ORDER BY position
-        ''',
-        (quiz_id,)
-    ).fetchall()
-
-    result_questions = []
-
-    for question in questions:
-        options = db.execute(
-            '''
-            SELECT id, option_text
-            FROM quiz_options
-            WHERE question_id = ?
-            ORDER BY id
-            ''',
-            (question['id'],)
-        ).fetchall()
-
-        result_questions.append({
-            'id': question['id'],
-            'question': question['question_text'],
-            'options': [
-                {'id': option['id'], 'text': option['option_text']}
-                for option in options
-            ]
-        })
-
-    return {
-        'attempt_id': attempt_id,
-        'quiz': {
-            'id': quiz['id'],
-            'title': quiz['title'],
-            'questions': result_questions
-        }
-    }
+    """Start an authorized published attempt and freeze its grading key privately."""
+    if not db.in_transaction:
+        db.execute('BEGIN IMMEDIATE')
+    student = student_account(db, user)
+    quiz = db.execute('SELECT id,group_id,title,status FROM quizzes WHERE id=?', (quiz_id,)).fetchone()
+    if quiz is None or quiz['status'] != 'published':
+        raise APIError(404, 'Published quiz not found.')
+    group_access(db, student, quiz['group_id'])
+    snapshot = freeze_questions(db, quiz)
+    cursor = db.execute('INSERT INTO quiz_attempts(quiz_id,student_id,grading_snapshot) VALUES(?,?,?)',
+                        (quiz_id, student['id'], json.dumps(snapshot)))
+    return {'attempt_id': cursor.lastrowid, 'quiz': {'id': quiz_id, 'title': quiz['title'],
+            'questions': public_questions(snapshot)}}
 
 
 def submit_quiz_attempt(db, user, attempt_id, data):
-    """Save a student's final answers and submit their attempt."""
-    if user['role'] != 'student':
-        raise APIError(403, 'Only students can submit quiz attempts')
-
-    attempt = db.execute(
-        '''
-        SELECT id, quiz_id, student_id, submitted_at
-        FROM quiz_attempts
-        WHERE id = ?
-        ''',
-        (attempt_id,)
-    ).fetchone()
-
-    if not attempt or attempt['student_id'] != user['id']:
-        raise APIError(404, 'Quiz attempt not found')
-
-    if attempt['submitted_at']:
-        raise APIError(409, 'This quiz attempt has already been submitted')
-
-    answers = data.get('answers')
-
-    if not isinstance(answers, list):
-        raise APIError(400, 'Answers must be provided as a list')
-
-    questions = db.execute(
-        '''
-        SELECT id
-        FROM quiz_questions
-        WHERE quiz_id = ?
-        ''',
-        (attempt['quiz_id'],)
-    ).fetchall()
-
-    question_ids = {question['id'] for question in questions}
-    submitted_question_ids = set()
-
-    for answer in answers:
-        if not isinstance(answer, dict):
-            raise APIError(400, 'Each answer must be an object')
-
-        question_id = answer.get('question_id')
-        option_id = answer.get('option_id')
-
-        if (
-            not isinstance(question_id, int)
-            or isinstance(question_id, bool)
-            or not isinstance(option_id, int)
-            or isinstance(option_id, bool)
-        ):
-            raise APIError(400, 'Invalid question or option ID')
-
-        if question_id not in question_ids or question_id in submitted_question_ids:
-            raise APIError(400, 'Invalid or duplicate question answer')
-
-        valid_option = db.execute(
-            '''
-            SELECT id
-            FROM quiz_options
-            WHERE id = ? AND question_id = ?
-            ''',
-            (option_id, question_id)
-        ).fetchone()
-
-        if not valid_option:
-            raise APIError(400, 'Selected option does not belong to this question')
-
-        submitted_question_ids.add(question_id)
-
-    for answer in answers:
-        db.execute(
-            '''
-            INSERT INTO quiz_attempt_answers (attempt_id, question_id, option_id)
-            VALUES (?, ?, ?)
-            ''',
-            (attempt_id, answer['question_id'], answer['option_id'])
-        )
-
-    db.execute(
-        '''
-        UPDATE quiz_attempts
-        SET submitted_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND submitted_at IS NULL
-        ''',
-        (attempt_id,)
-    )
-
-    return {'attempt_id': attempt_id, 'submitted': True}
+    """Preserve the #15 entrypoint while adding #16 grading and retry receipts."""
+    return submit_attempt(db, user, attempt_id, data)
