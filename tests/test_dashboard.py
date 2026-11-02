@@ -132,23 +132,46 @@ class DashboardTests(unittest.TestCase):
             self.assertNotIn(secret, serialized)
 
     def test_upcoming_tools_have_no_broken_or_privileged_action_links(self):
+        expected_actions = {
+            1: {
+                'quiz_creation': '/quizzes',
+                'performance': '/results',
+            },
+            2: {
+                'quiz_attempts': '/quizzes',
+                'results': '/results',
+            },
+            3: {},
+        }
+
+        allowed_links = [
+            '#study-groups',
+            '/access',
+            '/access#folders-panel',
+            '/materials',
+            '/admin/users',
+            '/quizzes',
+            '/results',
+        ]
+
         for uid in [1, 2, 3]:
             self.login_sample(uid)
             data = self.dashboard()
+
             for action in data['actions']:
                 if not action['available']:
                     self.assertIsNone(action['href'])
                 else:
-                    self.assertIn(action['href'], ['#study-groups', '/access', '/access#folders-panel', '/materials', '/admin/users', '/quizzes'])
-            for key in ['quiz_attempts', 'results', 'quiz_creation', 'performance']:
-                action = next((a for a in data['actions'] if a['key'] == key), None)
-                if action:
-                    if key == 'quiz_creation' and uid == 1:
-                        self.assertTrue(action['available'])
-                        self.assertEqual(action['href'], '/quizzes')
-                    else:
-                        self.assertFalse(action['available'])
+                    self.assertIn(action['href'], allowed_links)
 
+            for key, expected_href in expected_actions[uid].items():
+                action = next(
+                    (a for a in data['actions'] if a['key'] == key),
+                    None
+                )
+                self.assertIsNotNone(action)
+                self.assertTrue(action['available'])
+                self.assertEqual(action['href'], expected_href)
     def test_optional_folder_integration_only_appears_when_capability_is_present(self):
         self.login_sample(1)
         data = self.dashboard()

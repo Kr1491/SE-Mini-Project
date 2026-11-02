@@ -300,6 +300,141 @@ class QuizTests(unittest.TestCase):
             self.assertIsNotNone(db.execute("SELECT 1 FROM sqlite_master WHERE name='upload_idempotency'").fetchone())
         self.assertEqual((storage/'notes.txt').read_text(),'Saved academic material')
 
+    def test_student_can_submit_quiz_and_view_own_result(self):
+        self.login_sample(1)
 
-if __name__ == '__main__':
-    unittest.main()
+        status, _ = self.request(
+            'POST', '/api/groups/1/quizzes', self.valid_quiz()
+        )
+        self.assertEqual(status, 201)
+
+        self.login_sample(2)
+
+        status, result = self.request('GET', '/api/groups/1/quizzes')
+        self.assertEqual(status, 200)
+
+        quiz = result['quizzes'][0]
+        questions = quiz['questions']
+
+        answers = [
+            {
+                'question_id': questions[0]['id'],
+                'option_id': questions[0]['options'][0]['id']
+            },
+            {
+                'question_id': questions[1]['id'],
+                'option_id': questions[1]['options'][1]['id']
+            }
+        ]
+
+        status, submission = self.request(
+            'POST',
+            f"/api/quizzes/{quiz['id']}/attempts",
+            {'answers': answers}
+        )
+
+        self.assertEqual(status, 201)
+        self.assertEqual(submission['attempt']['score'], 2)
+        self.assertEqual(submission['attempt']['total_questions'], 2)
+        self.assertEqual(submission['attempt']['percentage'], 100)
+
+        status, results = self.request('GET', '/api/results/me')
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(results['results']), 1)
+        self.assertEqual(
+            results['results'][0]['quiz_title'],
+            'Database Fundamentals'
+        )
+        self.assertEqual(results['results'][0]['score'], 2)
+
+# Another student must not see this student's results.
+        self.login_sample(4)
+
+        status, other_results = self.request(
+            'GET', '/api/results/me'
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(other_results['results'], [])
+
+    def test_instructor_can_view_group_quiz_results(self):
+        # Instructor creates a quiz in their own group.
+        self.login_sample(1)
+
+        status, created = self.request(
+            'POST',
+            '/api/groups/1/quizzes',
+            self.valid_quiz()
+        )
+        self.assertEqual(status, 201)
+
+        quiz_id = created['quiz']['id']
+
+        # Student submits the quiz.
+        self.login_sample(2)
+
+        status, quiz_data = self.request(
+            'GET', '/api/groups/1/quizzes'
+        )
+        self.assertEqual(status, 200)
+
+        quiz = quiz_data['quizzes'][0]
+
+        answers = [
+            {
+                'question_id': quiz['questions'][0]['id'],
+                'option_id': quiz['questions'][0]['options'][0]['id']
+            },
+            {
+                'question_id': quiz['questions'][1]['id'],
+                'option_id': quiz['questions'][1]['options'][1]['id']
+            }
+        ]
+
+        status, submission = self.request(
+            'POST',
+            f'/api/quizzes/{quiz_id}/attempts',
+            {'answers': answers}
+        )
+        self.assertEqual(status, 201)
+
+        # Instructor views results for their group.
+        self.login_sample(1)
+
+        status, results = self.request(
+            'GET', '/api/groups/1/results'
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(results['results']), 1)
+        self.assertEqual(
+            results['results'][0]['quiz_title'],
+            'Database Fundamentals'
+        )
+        self.assertEqual(
+            results['results'][0]['score'],
+            2
+        )
+        self.assertEqual(
+            results['results'][0]['student_name'],
+            'Demo Student'
+        )
+
+    def test_student_cannot_view_group_results(self):
+        self.login_sample(2)
+
+        status, _ = self.request(
+            'GET', '/api/groups/1/results'
+        )
+
+        self.assertEqual(status, 403)
+
+    def test_instructor_cannot_view_unmanaged_group_results(self):
+        self.login_sample(1)
+
+        status, _ = self.request(
+            'GET', '/api/groups/3/results'
+        )
+
+        self.assertEqual(status, 403)

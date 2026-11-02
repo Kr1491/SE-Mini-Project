@@ -78,13 +78,36 @@ def build_dashboard(db, user, *, features=None):
             'instructor': ['quiz_creation', 'performance'],
             'administrator': ['user_management']}[role]
     actions = [group_action, folder_action, material_action]
+    action_routes = {
+        'quiz_attempts': {
+            'available': True,
+            'href': '/quizzes',
+        },
+        'results': {
+            'available': True,
+            'href': '/results',
+        },
+        'quiz_creation': {
+            'available': True,
+            'href': '/quizzes',
+        },
+        'performance': {
+            'available': True,
+            'href': '/results',
+        },
+        'user_management': {
+            'available': False,
+            'href': None,
+        },
+    }
+
     actions.extend({
         'key': key,
         'label': upcoming[key][0],
         'description': upcoming[key][1],
-        'available': key == 'quiz_creation' and role in ('instructor', 'administrator'),
-        'href': '/quizzes' if key == 'quiz_creation' and role in ('instructor', 'administrator') else None
-    } for key in keys)
+        'available': action_routes[key]['available'],
+        'href': action_routes[key]['href'],
+    } for key in keys) 
     if role == 'administrator' and (features or {}).get('user_management'):
         action = next(item for item in actions if item['key'] == 'user_management')
         action.update(available=True, href='/admin/users')

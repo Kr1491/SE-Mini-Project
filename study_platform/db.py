@@ -170,6 +170,32 @@ CREATE TABLE IF NOT EXISTS quiz_options (
     option_text TEXT NOT NULL CHECK(length(trim(option_text)) > 0),
     is_correct INTEGER NOT NULL DEFAULT 0 CHECK(is_correct IN (0, 1))
 );
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id INTEGER PRIMARY KEY,
+    quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+    student_id INTEGER NOT NULL REFERENCES users(id),
+    score INTEGER NOT NULL CHECK(score >= 0),
+    total_questions INTEGER NOT NULL CHECK(total_questions > 0),
+    submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK(score <= total_questions)
+);
+
+CREATE TABLE IF NOT EXISTS quiz_attempt_answers (
+    id INTEGER PRIMARY KEY,
+    attempt_id INTEGER NOT NULL REFERENCES quiz_attempts(id) ON DELETE CASCADE,
+    question_id INTEGER NOT NULL REFERENCES quiz_questions(id),
+    option_id INTEGER NOT NULL REFERENCES quiz_options(id),
+    UNIQUE(attempt_id, question_id)
+);
+
+CREATE INDEX IF NOT EXISTS quiz_attempts_quiz
+    ON quiz_attempts(quiz_id);
+
+CREATE INDEX IF NOT EXISTS quiz_attempts_student
+    ON quiz_attempts(student_id);
+
+CREATE INDEX IF NOT EXISTS quiz_attempt_answers_attempt
+    ON quiz_attempt_answers(attempt_id);
 
 CREATE INDEX IF NOT EXISTS quizzes_group ON quizzes(group_id);
 CREATE INDEX IF NOT EXISTS quiz_questions_quiz ON quiz_questions(quiz_id);

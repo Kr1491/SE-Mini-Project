@@ -24,7 +24,13 @@ from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_s
 
 from study_platform.dashboard import build_dashboard, require_dashboard_role
 from study_platform.admin_users import require_administrator, list_users, update_user_access, query_options as admin_query_options, integer as admin_integer
-from study_platform.quizzes import create_quiz, list_group_quizzes
+from study_platform.quizzes import (
+    create_quiz,
+    list_group_quizzes,
+    submit_quiz,
+    student_results,
+    group_results,
+)
 
 ROOT = Path(__file__).resolve().parent
 
@@ -143,6 +149,7 @@ class Handler(BaseHTTPRequestHandler):
             '/dashboard': ('dashboard.html', 'text/html; charset=utf-8'),
             '/dashboard/': ('dashboard.html', 'text/html; charset=utf-8'),
             '/quizzes': ('dashboard.html', 'text/html; charset=utf-8'),
+            '/results': ('dashboard.html', 'text/html; charset=utf-8'),
             '/access': ('index.html', 'text/html; charset=utf-8'),
             '/dashboard.js': ('dashboard.js', 'text/javascript; charset=utf-8'),
             '/dashboard.css': ('dashboard.css', 'text/css; charset=utf-8'),
@@ -318,6 +325,30 @@ class Handler(BaseHTTPRequestHandler):
                     result = create_quiz(db, user, group_id, self.body())
                     db.commit()
                     return self.json(201, {'quiz': result})
+
+                                      # Submit a quiz attempt
+            quiz_attempt_route = re.fullmatch(
+                r'/api/quizzes/([1-9][0-9]*)/attempts', path
+            )
+            if quiz_attempt_route and method == 'POST':
+                quiz_id = parse_group_id(quiz_attempt_route[1])
+                result = submit_quiz(db, user, quiz_id, self.body())
+                db.commit()
+                return self.json(201, {'attempt': result})
+
+            # View the logged-in student's own results
+            if method == 'GET' and path == '/api/results/me':
+                result = student_results(db, user)
+                return self.json(200, result)
+
+            # Instructor views results for a managed group
+            group_results_route = re.fullmatch(
+                r'/api/groups/([1-9][0-9]*)/results', path
+            )
+            if group_results_route and method == 'GET':
+                group_id = parse_group_id(group_results_route[1])
+                result = group_results(db, user, group_id)
+                return self.json(200, result)
 
             permission_routes = {
                 '/api/access/instructor': 'instructor.summary',
