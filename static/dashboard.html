@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>StudySpace · Your workspace</title>
-<link rel="stylesheet" href="/dashboard.css"><script src="/quiz-attempt.js" defer></script><script src="/dashboard.js" defer></script>
+<link rel="stylesheet" href="/dashboard.css"><script src="/quiz-attempt.js" defer></script><script src="/memberships.js" defer></script><script src="/dashboard.js" defer></script>
 </head>
 <body>
 <div id="demo-banner" class="demo-banner" hidden>LOCAL DEMO <span>Sample accounts and groups. Choose a sample account to explore.</span></div>
@@ -80,6 +80,8 @@
       placeholder="What will this group focus on?"
     ></textarea>
 
+    <label for="group-join-policy">Joining policy</label>
+    <select id="group-join-policy" name="join_policy"><option value="approval">Owner approval required</option><option value="open">Open joining</option></select>
     <button type="submit" id="create-group-button" class="secondary-button">
       Create group
     </button>
@@ -122,6 +124,12 @@
   </form>
 </section>
 
+<section id="membership-panel" class="create-group-panel" hidden aria-labelledby="membership-heading">
+<div class="section-heading"><h2 id="membership-heading">Group membership</h2><button id="refresh-memberships" type="button" class="text-button">Refresh requests ↻</button></div>
+<p id="membership-demo-notice" class="muted" hidden>Sample memberships are read-only. Use local test accounts to request or approve access.</p>
+<form id="request-join-form" hidden><label for="request-group-id">Group ID from your instructor</label><div class="membership-join"><input id="request-group-id" inputmode="numeric" pattern="[1-9][0-9]{0,18}" maxlength="19" placeholder="e.g. 3" required><button id="request-join-button" type="submit" class="secondary-button">Request to join</button></div></form>
+<p id="membership-status" class="status-message" role="status" aria-live="polite"></p><div id="membership-requests"></div><p class="muted">After a request is approved, refresh the overview to see your new group.</p>
+</section>
 <div class="section-heading tools-heading"><div><p class="eyebrow">YOUR NEXT STEP</p><h2 id="tools-heading"></h2></div><span class="count-label">Actions for your role</span></div>
 <section id="tools" class="tools-grid" aria-label="Available tools"></section>
 <div class="refresh-row"><span id="updated-at" class="muted"></span><button id="refresh-dashboard" class="text-button" type="button">Refresh overview ↻</button></div>

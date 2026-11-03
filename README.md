@@ -38,6 +38,14 @@ An Instructor can create and publish MCQs in an owned group. An eligible Student
 
 The database migration preserves existing records. In-progress attempts started before grading snapshots existed require a new start; older completed submissions remain ungraded rather than receiving invented scores. Results history/instructor performance is separate #17. [Run/PR commands](docs/issue-16-workflow.md), [scoring contract for #17](docs/issue-16-integration.md), and [test evidence](docs/issue-16-test-results.md).
 
+## Local security verification (#21 — final sign-off pending)
+
+Restricted groups now require owner/Administrator approval. Existing groups migrate to approval-required without removing existing members; new groups can explicitly choose Open joining. Students request access by the group ID shared by their instructor; owners/Administrators review requests from the dashboard. Pending/declined requests grant no resource access, and old approved requests cannot restore revoked membership. Demo memberships remain read-only.
+
+Backup/restore rejects symbolic links and requires private output/restore directories; copied data uses owner-only permissions. Group/folder/upload writes recheck current authorization before saving. [Executed security checks and remaining sign-off items](docs/issue-21-security-review.md), [run/PR commands](docs/issue-21-workflow.md).
+
+The project is localhost-only, so deployed HTTPS is **not verified**. Final result-history/performance checks await #17/PR #39. Passing local checks does not automatically complete #21.
+
 ## Group folders
 
 Open `/access` to use the group folder picker and creation form alongside the access-verification console. Instructors can create folders in groups they own, administrators in any group, and members can read their permitted groups' folders. Names are trimmed/Unicode-normalized, limited to 1–80 characters, and unique without case differences within a group. Records persist across restarts; validation, duplicate feedback, CSRF protection, and group access checks remain active.
@@ -57,6 +65,7 @@ Material access is **group-scoped**. The #7 folder table and routes are preserve
 ```bash
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q server.py study_platform tests
+node --check static/memberships.js
 node --check static/quiz-attempt.js
 node --check static/admin-users.js
 node --check static/login.js
@@ -69,7 +78,7 @@ node --test tests/*.cjs
 
 Node.js is required only for frontend tests and syntax checks. The Python suite dispatches actual HTTP handlers over in-memory connections with temporary SQLite databases; it needs no listening port. Frontend tests execute the actual JavaScript with a simulated DOM and fetch responses.
 
-Local results: **199 Python tests** pass on Python 3.12 and 3.14; **81 JavaScript tests** pass. CI retains pinned actions and Python 3.11/3.12 coverage. Live HTTP integration checks pass on a loopback server. Isolated Chrome sign-in/sign-out and administrator-management flows pass; updated remote CI follows the push.
+Local results: **231 Python tests** pass on Python 3.12 and 3.14; **88 JavaScript tests** pass. CI retains pinned actions and Python 3.11/3.12 coverage. Live HTTP integration checks pass on a loopback server. Isolated Chrome sign-in/sign-out and administrator-management flows pass; updated remote CI follows the push.
 
 ## Issue documents
 

@@ -292,7 +292,10 @@ class AccessTests(unittest.TestCase):
 
 
     def test_student_can_join_group_and_list_joined_groups(self):
-        self.login_sample(4)
+        self.server.demo = False
+        with connect(self.database) as db:
+            token, self.csrf = create_session(db, 4)
+        self.cookie = f'{COOKIE_NAME}={token}'
         status, body, _ = self.request('POST', '/api/groups/1/join', {})
         self.assertEqual(status, 201)
         self.assertTrue(body['joined'])
@@ -303,7 +306,10 @@ class AccessTests(unittest.TestCase):
         self.assertIn(1, [group['id'] for group in body['groups']])
 
     def test_duplicate_group_join_does_not_duplicate_membership(self):
-        self.login_sample(4)
+        self.server.demo = False
+        with connect(self.database) as db:
+            token, self.csrf = create_session(db, 4)
+        self.cookie = f'{COOKIE_NAME}={token}'
         first = self.request('POST', '/api/groups/1/join', {})[0]
         second_status, body, _ = self.request('POST', '/api/groups/1/join', {})
         self.assertEqual(first, 201)
@@ -321,12 +327,18 @@ class AccessTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/api/groups/1/join', {})[0], 403)
 
     def test_join_group_rejects_missing_group(self):
-        self.login_sample(4)
+        self.server.demo = False
+        with connect(self.database) as db:
+            token, self.csrf = create_session(db, 4)
+        self.cookie = f'{COOKIE_NAME}={token}'
         self.assertEqual(self.request('POST', '/api/groups/999/join', {})[0], 404)
 
 
     def test_nonmember_cannot_access_group_until_joining(self):
-        self.login_sample(4)
+        self.server.demo = False
+        with connect(self.database) as db:
+            token, self.csrf = create_session(db, 4)
+        self.cookie = f'{COOKIE_NAME}={token}'
         self.assertEqual(self.request('GET', '/api/access/groups/1')[0], 403)
 
         status, body, _ = self.request('POST', '/api/groups/1/join', {})

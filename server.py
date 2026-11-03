@@ -32,6 +32,7 @@ from study_platform.quizzes import (
     start_quiz_attempt,
     submit_quiz_attempt,
 )
+from study_platform.memberships import join_group, list_requests, review_request
 
 ROOT = Path(__file__).resolve().parent
 
@@ -143,6 +144,14 @@ class Handler(BaseHTTPRequestHandler):
             value += '; Secure'
         return value
 
+    def write_user(self, db):
+        if not db.in_transaction:
+            db.execute('BEGIN IMMEDIATE')
+        account = current_session(db, self.headers.get('Cookie'), allow_demo=self.server.demo)
+        if not secrets.compare_digest(self.headers.get('X-CSRF-Token', '').encode('utf-8'), account['csrf_token'].encode('utf-8')):
+            raise APIError(403, 'Invalid request token. Refresh the page and try again.')
+        return account
+
     def dispatch(self, method):
         path = urlsplit(self.path).path
         dashboard_assets = {
@@ -158,6 +167,7 @@ class Handler(BaseHTTPRequestHandler):
             '/login/': ('login.html', 'text/html; charset=utf-8'),
             '/login.js': ('login.js', 'text/javascript; charset=utf-8'),
             '/login.css': ('login.css', 'text/css; charset=utf-8'),
+            '/memberships.js': ('memberships.js', 'text/javascript; charset=utf-8'),
             '/admin-users.js': ('admin-users.js', 'text/javascript; charset=utf-8'),
             '/admin-users.css': ('admin-users.css', 'text/css; charset=utf-8'),
         }
@@ -271,6 +281,9 @@ class Handler(BaseHTTPRequestHandler):
                     data = self.body()
                     name = data.get('name')
                     description = data.get('description', '')
+                    join_policy = data.get('join_policy', 'approval')
+                    if join_policy not in ('open', 'approval'):
+                        raise APIError(400, 'Choose open joining or approval required.')
 
                     if not isinstance(name, str) or not name.strip():
                         raise APIError(400, 'A group name is required.')
@@ -287,10 +300,13 @@ class Handler(BaseHTTPRequestHandler):
                     name = name.strip()
                     description = description.strip()
 
+                    user = self.write_user(db)
+                    if user['role'] != 'instructor':
+                        raise APIError(403, 'Only instructors can create study groups.')
                     cursor = db.execute(
-                        '''INSERT INTO study_groups (name, description, created_by)
-                        VALUES (?, ?, ?)''',
-                        (name, description, user['id'])
+                        '''INSERT INTO study_groups (name, description, created_by, join_policy)
+                        VALUES (?, ?, ?, ?)''',
+                        (name, description, user['id'], join_policy)
                     )
                     group_id = cursor.lastrowid
 
@@ -301,6 +317,7 @@ class Handler(BaseHTTPRequestHandler):
                             'id': group_id,
                             'name': name,
                             'description': description,
+                            'join_policy': join_policy,
                             'created_by': user['id']
                         }
                     })
@@ -312,6 +329,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.json(200, list_folders(db, user, group_id))
                 if method == 'POST':
                     data = self.body()
+                    user = self.write_user(db)
                     folder = create_folder(db, user, group_id, data.get('name'))
                     # Make the folder visible before the client receives success.
                     db.commit()
@@ -370,43 +388,29 @@ class Handler(BaseHTTPRequestHandler):
                     raise APIError(400, 'Invalid study group ID.')
                 group = group_access(db, user, int(raw_id), manage=bool(match[2]))
                 return self.json(200, {'allowed': True, 'message': f'Access verified for {group["name"]}.', 'group': group})
-            if method == 'GET' and path == '/api/groups':
-                groups = db.execute(
-                    '''SELECT g.id, g.name, g.created_by
-                       FROM memberships m
-                       JOIN study_groups g ON g.id = m.group_id
-                       WHERE m.user_id = ?
-                       ORDER BY g.name COLLATE NOCASE, g.id''',
-                    (user['id'],)
-                ).fetchall()
-                return self.json(200, {'groups': [dict(g) for g in groups]})
-
+            if path == '/api/membership-requests' and method == 'GET':
+                result = list_requests(db, user)
+                result['read_only'] = self.server.demo
+                return self.json(200, result)
+            review_match = re.fullmatch(r'/api/membership-requests/([1-9][0-9]*)/review', path)
+            if method == 'POST' and review_match:
+                if user['role'] not in ('instructor', 'administrator'):
+                    raise APIError(403, 'Only group owners and administrators can review requests.')
+                if self.server.demo:
+                    raise APIError(409, 'Sample memberships are read-only. Use local test accounts.')
+                result = review_request(db, user, admin_integer(review_match[1], minimum=1), self.body())
+                db.commit()
+                return self.json(200, result)
             join_match = re.fullmatch(r'/api/groups/([1-9][0-9]*)/join', path)
             if method == 'POST' and join_match:
-                raw_id = join_match[1]
-                if len(raw_id) > 19 or int(raw_id) > 9223372036854775807:
-                    raise APIError(400, 'Invalid study group ID.')
                 if user['role'] != 'student':
                     raise APIError(403, 'Only students can join study groups.')
-
-                group_id = int(raw_id)
-                group = db.execute(
-                    'SELECT id, name, created_by FROM study_groups WHERE id = ?',
-                    (group_id,)
-                ).fetchone()
-                if not group:
-                    raise APIError(404, 'Study group not found.')
-
-                result = db.execute(
-                    'INSERT OR IGNORE INTO memberships (group_id, user_id) VALUES (?, ?)',
-                    (group_id, user['id'])
-                )
-                already_member = result.rowcount == 0
-                return self.json(
-                    200 if already_member else 201,
-                    {'joined': True, 'already_member': already_member, 'group': dict(group)}
-                )
-
+                if self.server.demo:
+                    raise APIError(409, 'Sample memberships are read-only. Use local test accounts.')
+                self.body()
+                status, result = join_group(db, user, parse_group_id(join_match[1]))
+                db.commit()
+                return self.json(status, result)
 
             upload_match = re.fullmatch(r'/api/groups/([1-9][0-9]*)/materials', path)
 
@@ -511,6 +515,11 @@ class Handler(BaseHTTPRequestHandler):
                     if b'\x00' in data:
                         raise APIError(415, 'The file content is not valid text.')
 
+                user = self.write_user(db)
+                group = group_access(db, user, int(raw_id), manage=True)
+                if folder_id is not None and not db.execute('SELECT id FROM folders WHERE id=? AND group_id=?', (folder_id, group['id'])).fetchone():
+                    raise APIError(404, 'Destination folder not found in this group.')
+
                 idempotency_key = self.headers.get('Idempotency-Key')
                 request_hash = None
 
@@ -525,7 +534,6 @@ class Handler(BaseHTTPRequestHandler):
                     ).encode('utf-8') + b'\\0' + data
                     request_hash = hashlib.sha256(hash_input).hexdigest()
 
-                    db.execute('BEGIN IMMEDIATE')
                     previous = db.execute(
                         'SELECT i.request_hash, m.id, m.group_id, m.folder_id, '
                         'm.original_name, m.content_type, m.size_bytes '
