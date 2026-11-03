@@ -9,9 +9,28 @@ async function request(path, options = {}) {
   const headers = {...options.headers};
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (session) headers["X-CSRF-Token"] = session.csrf_token;
-  const response = await fetch(path, {...options, headers, credentials:"same-origin"});
-  const data = await response.json();
-  if (!response.ok) throw new Error(`${response.status}: ${data.error}`);
+
+  let response;
+  try {
+    response = await fetch(path, {...options, headers, credentials:"same-origin"});
+  } catch {
+    throw new Error("Cannot reach the application. Check your connection and try again.");
+  }
+
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("The application returned an invalid response. Please try again.");
+  }
+
+  if (!response.ok) {
+    const message = response.status >= 500
+      ? "The request could not be completed. Please try again."
+      : (data.error || "Your request could not be completed. Please try again.");
+    throw new Error(message);
+  }
+
   return data;
 }
 async function showAccess(revision) {
