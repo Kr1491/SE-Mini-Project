@@ -68,7 +68,8 @@ test('a slow earlier success cannot overwrite the latest denied probe', async ()
   const first = ui.probe('instructor'); const second = ui.probe('admin');
   latest.resolve(response(403, {error: 'Access denied'})); await second;
   const expected = ui.element('check-result').textContent;
-  assert.match(expected, /403.*Access denied/);
+  assert.equal(expected, 'Access denied');
+  assert.doesNotMatch(expected, /\b403\b/);
   earlier.resolve(response(200, {message: 'Earlier allowed result'})); await first;
   assert.equal(ui.element('check-result').textContent, expected);
   assert.equal(ui.element('check-result').classList.contains('allowed'), false);
@@ -126,4 +127,32 @@ test('secondary text meets 4.5:1 contrast against its actual background', () => 
     const value = contrast(color(selector), bg);
     assert.ok(value >= 4.5, `${selector}: ${value.toFixed(2)}:1`);
   }
+});
+
+test('server errors show a friendly message without technical details', async () => {
+  const ui = harness(async url => {
+    if (url === '/api/health') return response(200, {demo: true});
+    if (url === '/api/session') return response(200, account());
+    if (url === '/api/access/admin') {
+      return response(500, {error: 'Internal database connection failed'});
+    }
+    throw new Error(`Unexpected route ${url}`);
+  });
+
+  await ui.initialized;
+  await ui.probe('admin');
+
+  assert.match(ui.element('check-result').textContent, /request could not be completed/i);
+  assert.doesNotMatch(ui.element('check-result').textContent, /database|500|Internal/);
+});
+
+test('network failures show a friendly message instead of browser errors', async () => {
+  const ui = harness(async url => {
+    if (url === '/api/health') throw new Error('Failed to fetch');
+    throw new Error(`Unexpected route ${url}`);
+  });
+
+  await ui.initialized;
+  assert.match(ui.element('message').textContent, /Cannot reach the application/i);
+  assert.doesNotMatch(ui.element('message').textContent, /Failed to fetch/);
 });
