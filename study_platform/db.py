@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from .admin_users import AUDIT_SCHEMA
 from .quiz_scoring import SCHEMA as SCORING_SCHEMA
+from .memberships import SCHEMA as MEMBERSHIP_SCHEMA
 
 MATERIALS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS materials (
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS study_groups (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
+    join_policy TEXT NOT NULL DEFAULT 'approval' CHECK(join_policy IN ('open','approval')),
     created_by INTEGER NOT NULL REFERENCES users(id)
 );
 CREATE TABLE IF NOT EXISTS memberships (
@@ -220,7 +222,7 @@ def _migrate_upload_idempotency(db):
 def initialize(path):
     _secure_database(path)
     with connect(path) as db:
-        db.executescript(SCHEMA + AUDIT_SCHEMA + QUIZ_SCHEMA + SCORING_SCHEMA)
+        db.executescript(SCHEMA + AUDIT_SCHEMA + QUIZ_SCHEMA + SCORING_SCHEMA + MEMBERSHIP_SCHEMA)
         attempt_columns = {row['name'] for row in db.execute('PRAGMA table_info(quiz_attempts)')}
         if 'grading_snapshot' not in attempt_columns:
             db.execute('ALTER TABLE quiz_attempts ADD COLUMN grading_snapshot TEXT')
@@ -239,6 +241,9 @@ def initialize(path):
         _migrate_material_folders(db)
         _migrate_upload_idempotency(db)
         _migrate_study_group_description(db)
+        group_columns = {row['name'] for row in db.execute('PRAGMA table_info(study_groups)')}
+        if 'join_policy' not in group_columns:
+            db.execute("ALTER TABLE study_groups ADD COLUMN join_policy TEXT NOT NULL DEFAULT 'approval' CHECK(join_policy IN ('open','approval'))")
         columns = {
             row['name']: row
             for row in db.execute('PRAGMA table_info(sessions)')

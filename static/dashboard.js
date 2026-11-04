@@ -33,7 +33,9 @@
     byId('dashboard-status').classList.toggle('error', error);
   }
   function clearWorkspace() {
+    globalThis.StudyResults?.reset?.();
     globalThis.StudyQuizAttempt?.reset?.(); startingQuiz = false;
+    globalThis.StudyMemberships?.reset?.();
     document.title = 'StudySpace · Your workspace';
     byId('dashboard-content').hidden = true;
     byId('profile').hidden = true;
@@ -52,11 +54,12 @@
     byId('quiz-questions').replaceChildren(); byId('quiz-group').replaceChildren();
     byId('create-quiz-button').disabled = false; byId('add-quiz-question').disabled = false;
     byId('quiz-title').disabled = false; byId('quiz-group').disabled = false;
+    byId('group-join-policy').value = 'approval';
     quizQuestionCounter = 0;
     delete document.body.dataset.role;
   }
   function safeHref(value) {
-    return typeof value === 'string' && (/^#[a-z0-9-]+$/.test(value) || value === '/access' || value === '/access#folders-panel' || value === '/materials' || value === '/admin/users' || value === '/quizzes') ? value : null;
+    return typeof value === 'string' && (/^#[a-z0-9-]+$/.test(value) || value === '/access' || value === '/access#folders-panel' || value === '/materials' || value === '/admin/users' || value === '/quizzes' || value === '/results') ? value : null;
   }
   function render(data) {
     document.body.dataset.role = data.role;
@@ -82,7 +85,9 @@
       byId('dashboard-stats').append(card);
     }
     const createGroupPanel = byId('create-group-panel');
-    createGroupPanel.hidden = data.role !== 'instructor';
+    const isResultsPage = globalThis.location?.pathname === '/results';
+    createGroupPanel.hidden = data.role !== 'instructor' || isResultsPage;
+    byId('group-quizzes-panel').hidden = isResultsPage;
 
     const quizCreationPanel = byId('quiz-creation-panel');
     const isQuizPage = globalThis.location?.pathname === '/quizzes';
@@ -112,7 +117,7 @@
     for (const group of data.groups) {
       const card = node('article', 'group-card');
       card.append(node('span', 'group-icon', '▱'), node('h3', '', group.name),
-        node('p', '', group.relationship), node('span', 'group-tag', group.can_manage ? 'Management access' : 'Read access'));
+        node('p', '', `${group.relationship} · Group #${group.id}${group.join_policy ? ' · ' + (group.join_policy === 'open' ? 'Open joining' : 'Approval required') : ''}`), node('span', 'group-tag', group.can_manage ? 'Management access' : 'Read access'));
       byId('study-groups').append(card);
     }
     if (!data.groups.length) byId('study-groups').append(node('p', 'empty-state', 'No study groups are available for this account yet. Your groups will appear here when access is granted.'));
@@ -130,6 +135,13 @@
     byId('updated-at').textContent = Number.isNaN(updated.getTime()) ? '' : `Updated ${updated.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
     byId('signed-out').hidden = true;
     byId('dashboard-content').hidden = false;
+    globalThis.StudyMemberships?.load?.(currentSession, {onJoined: async result => {
+      const token = ++revision;
+      if (await load(token) && token === revision) status(`You joined ${result.group.name}.`);
+    }});
+    if (isResultsPage) globalThis.StudyResults?.load?.(currentSession, {groups: data.groups, request, onDenied: error => {
+      ++revision; currentSession = null; clearWorkspace(); byId('signed-out').hidden = false; status(error.message, true);
+    }});
   }
   async function loadGroupQuizzes(groups, role, token) {
     const container = byId('group-quizzes');
@@ -294,7 +306,7 @@
       const data = await request(dashboardApi);
       if (token !== revision) return false;
       render(data);
-      loadGroupQuizzes(data.groups, data.role, token).catch(error => {
+      if (globalThis.location?.pathname !== '/results') loadGroupQuizzes(data.groups, data.role, token).catch(error => {
         if (token === revision) {
           console.error('Could not load group quizzes:', error);
         }
@@ -368,6 +380,7 @@
     const message = byId('create-group-status');
     const name = byId('group-name').value.trim();
     const description = byId('group-description').value.trim();
+    const join_policy = byId('group-join-policy').value || 'approval';
 
     message.textContent = '';
     message.classList.remove('error');
@@ -383,7 +396,7 @@
     try {
       await request('/api/groups', {
         method: 'POST',
-        body: JSON.stringify({name, description})
+        body: JSON.stringify({name, description, join_policy})
       });
 
 

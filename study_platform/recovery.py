@@ -6,9 +6,32 @@ import json
 import os
 import shutil
 import sqlite3
+import stat
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def _private_directory(path):
+    path = Path(path)
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode):
+        raise ValueError('Backup and restore directories cannot be symbolic links.')
+    if os.name == 'posix' and (info.st_uid != os.getuid() or info.st_mode & 0o077):
+        raise PermissionError('Use an owned private directory with permissions 0700 for backups and restored data.')
+
+
+def _private_tree(folder):
+    for path in [Path(folder), *Path(folder).rglob('*')]:
+        if path.is_symlink():
+            raise ValueError('Symbolic links are not allowed.')
+        if path.is_dir():
+            path.chmod(0o700)
+        elif path.is_file():
+            path.chmod(0o600)
+        else:
+            raise ValueError('Only regular files and directories are allowed.')
 
 
 def _sha256(path):
@@ -29,12 +52,16 @@ def _check_database(path):
 
 
 def _file_manifest(folder):
+    if Path(folder).is_symlink() or not Path(folder).is_dir():
+        raise ValueError('Storage must be a real directory, not a symbolic link.')
     result = {}
     for path in sorted(Path(folder).rglob('*')):
         if path.is_symlink():
             raise ValueError('Symbolic links are not allowed.')
         if path.is_file():
             result[path.relative_to(folder).as_posix()] = _sha256(path)
+        elif not path.is_dir():
+            raise ValueError('Only regular files and directories are allowed.')
     return result
 
 
@@ -43,10 +70,12 @@ def create_backup(database_path, storage_path, backup_root):
     storage_path = Path(storage_path)
     backup_root = Path(backup_root)
 
+    if database_path.is_symlink() or storage_path.is_symlink():
+        raise ValueError('Backup source paths cannot be symbolic links.')
     if not database_path.is_file():
         raise FileNotFoundError('Database file does not exist.')
 
-    backup_root.mkdir(parents=True, exist_ok=True)
+    _private_directory(backup_root)
     timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     final_dir = backup_root / ('backup-' + timestamp)
 
@@ -54,19 +83,24 @@ def create_backup(database_path, storage_path, backup_root):
         temp = Path(temp)
         snapshot = temp / 'database.sqlite3'
         storage_copy = temp / 'storage'
-        storage_copy.mkdir()
+        storage_copy.mkdir(mode=0o700)
 
         with sqlite3.connect(str(database_path)) as source:
             with sqlite3.connect(str(snapshot)) as destination:
                 source.backup(destination)
 
+        snapshot.chmod(0o600)
         _check_database(snapshot)
 
         if storage_path.exists():
             if not storage_path.is_dir():
                 raise ValueError('Storage path must be a directory.')
-            shutil.copytree(storage_path, storage_copy, dirs_exist_ok=True)
+            _file_manifest(storage_path)
+            # Preserve links during copying so validation rejects rather than
+            # dereferences a link that appears while the source is copied.
+            shutil.copytree(storage_path, storage_copy, dirs_exist_ok=True, symlinks=True)
 
+        _private_tree(storage_copy)
         manifest = {
             'format_version': 1,
             'created_at': timestamp,
@@ -77,6 +111,7 @@ def create_backup(database_path, storage_path, backup_root):
         (temp / 'manifest.json').write_text(
             json.dumps(manifest, indent=2), encoding='utf-8'
         )
+        (temp / 'manifest.json').chmod(0o600)
         os.replace(str(temp), str(final_dir))
 
     return final_dir
@@ -88,6 +123,8 @@ def validate_backup(backup_dir):
     database = backup_dir / 'database.sqlite3'
     storage = backup_dir / 'storage'
 
+    if any(path.is_symlink() for path in (backup_dir, manifest_path, database, storage)):
+        raise ValueError('Backup components cannot be symbolic links.')
     if not manifest_path.is_file() or not database.is_file() or not storage.is_dir():
         raise ValueError('Backup is incomplete.')
 
@@ -113,19 +150,23 @@ def restore_backup(backup_dir, database_path, storage_path):
 
     validate_backup(backup_dir)
 
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    _private_directory(database_path.parent)
+    _private_directory(storage_path.parent)
 
     if database_path.is_symlink() or storage_path.is_symlink():
         raise ValueError('Restore targets cannot be symbolic links.')
+    if storage_path.exists():
+        _file_manifest(storage_path)
 
     with tempfile.TemporaryDirectory(dir=database_path.parent) as db_temp:
         staged_db = Path(db_temp) / 'database.sqlite3'
         shutil.copy2(backup_dir / 'database.sqlite3', staged_db)
+        staged_db.chmod(0o600)
 
         with tempfile.TemporaryDirectory(dir=storage_path.parent) as storage_temp:
             staged_storage = Path(storage_temp) / 'storage'
-            shutil.copytree(backup_dir / 'storage', staged_storage)
+            shutil.copytree(backup_dir / 'storage', staged_storage, symlinks=True)
+            _private_tree(staged_storage)
 
             _check_database(staged_db)
 

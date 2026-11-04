@@ -40,7 +40,7 @@ def build_dashboard(db, user, *, features=None):
     details = ROLE_DETAILS[role]
     parameters = (role, user['id'], user['id'])
     groups = [dict(row) for row in db.execute(
-        f'SELECT g.id,g.name,g.created_by FROM study_groups g WHERE {GROUP_SCOPE} ORDER BY g.name,g.id', parameters)]
+        f'SELECT g.id,g.name,g.created_by,g.join_policy FROM study_groups g WHERE {GROUP_SCOPE} ORDER BY g.name,g.id', parameters)]
     for group in groups:
         group['can_manage'] = role == 'administrator' or (role == 'instructor' and group['created_by'] == user['id'])
         group['relationship'] = 'Owner' if group['created_by'] == user['id'] else ('Administrator access' if role == 'administrator' else 'Member')
@@ -85,6 +85,9 @@ def build_dashboard(db, user, *, features=None):
         'available': (key == 'quiz_creation' and role in ('instructor', 'administrator')) or (key == 'quiz_attempts' and role == 'student'),
         'href': '/quizzes' if (key == 'quiz_creation' and role in ('instructor', 'administrator')) or (key == 'quiz_attempts' and role == 'student') else None
     } for key in keys)
+    for action in actions:
+        if action['key'] in ('results', 'performance'):
+            action.update(available=True, href='/results')
     if role == 'administrator' and (features or {}).get('user_management'):
         action = next(item for item in actions if item['key'] == 'user_management')
         action.update(available=True, href='/admin/users')

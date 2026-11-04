@@ -24,7 +24,9 @@ jobs:
         run: node --test tests/*.cjs
       - name: Check browser JavaScript syntax
         run: |
+          node --check static/results.js
           node --check static/quiz-attempt.js
+          node --check static/memberships.js
           node --check static/admin-users.js
           node --check static/login.js
           node --check static/app.js

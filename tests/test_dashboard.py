@@ -139,11 +139,14 @@ class DashboardTests(unittest.TestCase):
                 if not action['available']:
                     self.assertIsNone(action['href'])
                 else:
-                    self.assertIn(action['href'], ['#study-groups', '/access', '/access#folders-panel', '/materials', '/admin/users', '/quizzes'])
+                    self.assertIn(action['href'], ['#study-groups', '/access', '/access#folders-panel', '/materials', '/admin/users', '/quizzes', '/results'])
             for key in ['quiz_attempts', 'results', 'quiz_creation', 'performance']:
                 action = next((a for a in data['actions'] if a['key'] == key), None)
                 if action:
-                    if (key == 'quiz_creation' and uid == 1) or (key == 'quiz_attempts' and data['role'] == 'student'):
+                    if key in ('results', 'performance'):
+                        self.assertTrue(action['available'])
+                        self.assertEqual(action['href'], '/results')
+                    elif (key == 'quiz_creation' and uid == 1) or (key == 'quiz_attempts' and data['role'] == 'student'):
                         self.assertTrue(action['available'])
                         self.assertEqual(action['href'], '/quizzes')
                     else:
