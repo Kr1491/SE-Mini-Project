@@ -8,3 +8,26 @@
 #upload-form button,#upload-status{grid-column:1/-1}
 #upload-status:empty{display:none}
 @media(max-width:640px){#upload-form{grid-template-columns:1fr}}
+
+/* Mobile material card actions */
+@media (max-width: 600px) {
+  .material-card {
+    align-items: flex-start;
+  }
+
+  .material-details {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .material-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .material-actions button {
+    min-height: 44px;
+  }
+}
