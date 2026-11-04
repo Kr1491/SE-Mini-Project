@@ -1,183 +1,126 @@
-
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>StudySpace · Your workspace</title>
-<link rel="stylesheet" href="/dashboard.css">
-<script src="/dashboard.js" defer></script>
+<link rel="stylesheet" href="/dashboard.css"><script src="/quiz-attempt.js" defer></script><script src="/results.js" defer></script><script src="/dashboard.js" defer></script>
 </head>
 <body>
-<div id="demo-banner" class="demo-banner" hidden>
-  LOCAL DEMO <span>Sample accounts and groups. Choose a sample account to explore.</span>
-</div>
-
+<div id="demo-banner" class="demo-banner" hidden>LOCAL DEMO <span>Sample accounts and groups. Choose a sample account to explore.</span></div>
 <div class="workspace">
-  <aside class="sidebar">
-    <a class="brand" href="/dashboard">
-      <span class="brand-mark">S</span>StudySpace<span class="brand-dot">.</span>
-    </a>
-    <p class="nav-label">YOUR WORKSPACE</p>
-    <nav id="dashboard-nav" aria-label="Workspace navigation"></nav>
-    <a class="access-link" href="/access">Access checks ↗</a>
-    <div class="sidebar-bottom">
-      <span class="status-dot"></span>A little progress, together.
+<aside class="sidebar"><a class="brand" href="/dashboard"><span class="brand-mark">S</span>StudySpace<span class="brand-dot">.</span></a><p class="nav-label">YOUR WORKSPACE</p><nav id="dashboard-nav" aria-label="Workspace navigation"></nav><a class="access-link" href="/access">Access checks ↗</a><div class="sidebar-bottom"><span class="status-dot"></span>A little progress, together.</div></aside>
+<div class="main-shell">
+<header class="topbar"><span>Workspace <span class="breadcrumb">/ Overview</span></span><div id="profile" class="profile" hidden><span id="profile-avatar" class="avatar"></span><div><strong id="profile-name"></strong><small id="profile-email"></small></div><button id="logout" class="text-button" type="button">Sign out</button></div></header>
+<main id="overview">
+<section id="sample-panel" class="sample-panel" hidden aria-labelledby="sample-heading"><div><h2 id="sample-heading">Explore a sample workspace</h2><p>Choose an account to preview its dashboard and permitted actions.</p></div><div id="sample-accounts" class="account-buttons"><button type="button" data-account="2">Student</button><button type="button" data-account="1">Instructor</button><button type="button" data-account="3">Administrator</button><button type="button" data-account="4">Student without groups</button></div></section>
+<p id="dashboard-status" class="status-message" role="status" aria-live="polite">Loading your workspace…</p>
+<section id="signed-out" class="signed-out" hidden><p class="eyebrow">A SHARED SPACE FOR BETTER LEARNING</p><h1>Your workspace<br>is waiting<span>.</span></h1><p id="signed-out-description">Sign in to see your groups and role-specific tools.</p><a class="secondary-button" href="/login">Sign in</a></section>
+<div id="dashboard-content" hidden>
+<div class="page-heading"><div><p id="dashboard-eyebrow" class="eyebrow"></p><h1 id="dashboard-title"></h1><p id="dashboard-description" class="muted"></p></div><span id="dashboard-role" class="role-badge"></span></div>
+<section id="dashboard-stats" class="stats" aria-label="Workspace summary"></section>
+<div class="section-heading"><div><p class="eyebrow">LEARN BETTER, TOGETHER</p><h2 id="groups-heading"></h2></div><span id="groups-count" class="count-label"></span></div>
+<section id="study-groups" class="group-grid" aria-label="Study groups"></section>
+<section id="group-quizzes-panel">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">LEARN AND PRACTISE</p>
+      <h2>Available quizzes</h2>
     </div>
-  </aside>
-
-  <div class="main-shell">
-    <header class="topbar">
-      <span>Workspace <span class="breadcrumb">/ Overview</span></span>
-      <div id="profile" class="profile" hidden>
-        <span id="profile-avatar" class="avatar"></span>
+    <span id="quiz-list-count" class="count-label"></span>
+  </div>
+<div id="group-quizzes" class="quiz-list">
+    <p class="empty-state">Loading quizzes...</p>
+</div>
+<section id="quiz-attempt-panel" class="quiz-attempt-panel" hidden>
+    <div class="section-heading">
         <div>
-          <strong id="profile-name"></strong>
-          <small id="profile-email"></small>
+            <p class="eyebrow">TEST YOUR KNOWLEDGE</p>
+            <h2 id="attempt-quiz-title">Quiz</h2>
         </div>
-        <button id="logout" class="text-button" type="button">Sign out</button>
-      </div>
-    </header>
+        <button id="close-quiz-attempt" class="secondary-button" type="button">
+            Back to quizzes
+        </button>
+    </div>
 
-    <main id="overview">
-      <section id="sample-panel" class="sample-panel" hidden aria-labelledby="sample-heading">
-        <div>
-          <h2 id="sample-heading">Explore a sample workspace</h2>
-          <p>Choose an account to preview its dashboard and permitted actions.</p>
-        </div>
-        <div id="sample-accounts" class="account-buttons">
-          <button type="button" data-account="2">Student</button>
-          <button type="button" data-account="1">Instructor</button>
-          <button type="button" data-account="3">Administrator</button>
-          <button type="button" data-account="4">Student without groups</button>
-        </div>
-      </section>
+    <form id="quiz-attempt-form">
+        <p class="muted">Each question is worth 1 point. Wrong or unanswered questions receive 0 points.</p>
+        <div id="attempt-questions"></div>
+        <button id="submit-quiz-attempt" class="primary-button" type="submit">
+            Submit answers
+        </button>
+    </form>
 
-      <p id="dashboard-status" class="status-message" role="status" aria-live="polite">
-        Loading your workspace…
-      </p>
+    <div id="attempt-confirmation" class="attempt-confirmation" hidden><p id="attempt-confirmation-text" role="status"></p><button id="confirm-quiz-submit" class="primary-button" type="button">Confirm submission</button><button id="edit-quiz-answers" class="secondary-button" type="button">Keep editing</button></div>
+    <p id="attempt-message" role="status" aria-live="polite"></p>
+    <section id="attempt-result" class="attempt-result" aria-labelledby="attempt-result-heading" hidden><p class="eyebrow">SUBMISSION SAVED</p><h3 id="attempt-result-heading" tabindex="-1">Your score</h3><strong id="attempt-score"></strong><p id="attempt-result-summary"></p></section>
+</section>
+</section>
 
-      <section id="signed-out" class="signed-out" hidden>
-        <p class="eyebrow">A SHARED SPACE FOR BETTER LEARNING</p>
-        <h1>Your workspace<br>is waiting<span>.</span></h1>
-        <p id="signed-out-description">Sign in to see your groups and role-specific tools.</p>
-        <a class="secondary-button" href="/login">Sign in</a>
-      </section>
+<section id="create-group-panel" class="create-group-panel" hidden>
+  <h2>Create a study group</h2>
+  <p class="muted">Set up a space for collaborative learning.</p>
 
-      <div id="dashboard-content" hidden>
-        <div class="page-heading">
-          <div>
-            <p id="dashboard-eyebrow" class="eyebrow"></p>
-            <h1 id="dashboard-title"></h1>
-            <p id="dashboard-description" class="muted"></p>
-          </div>
-          <span id="dashboard-role" class="role-badge"></span>
-        </div>
+  <form id="create-group-form">
+    <label for="group-name">Group name</label>
+    <input
+      id="group-name"
+      name="name"
+      type="text"
+      maxlength="100"
+      required
+      placeholder="e.g. Machine Learning"
+    >
 
-        <section id="dashboard-stats" class="stats" aria-label="Workspace summary"></section>
+    <label for="group-description">Description</label>
+    <textarea
+      id="group-description"
+      name="description"
+      maxlength="1000"
+      rows="3"
+      placeholder="What will this group focus on?"
+    ></textarea>
 
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">LEARN BETTER, TOGETHER</p>
-            <h2 id="groups-heading"></h2>
-          </div>
-          <span id="groups-count" class="count-label"></span>
-        </div>
+    <button type="submit" id="create-group-button" class="secondary-button">
+      Create group
+    </button>
 
-        <section id="study-groups" class="group-grid" aria-label="Study groups"></section>
+    <p id="create-group-status" role="status" aria-live="polite"></p>
+  </form>
+</section>
 
-        <!-- Instructor: create study groups -->
-        <section id="create-group-panel" class="create-group-panel" hidden>
-          <h2>Create a study group</h2>
-          <p class="muted">Set up a space for collaborative learning.</p>
+<section id="quiz-creation-panel" class="create-group-panel" hidden>
+  <h2>Create a quiz</h2>
+  <p class="muted">Create questions and answer options for your study group.</p>
 
-          <form id="create-group-form">
-            <label for="group-name">Group name</label>
-            <input
-              id="group-name"
-              name="name"
-              type="text"
-              maxlength="100"
-              required
-              placeholder="e.g. Machine Learning"
-            >
+  <form id="create-quiz-form">
+    <label for="quiz-group">Study group</label>
+    <select id="quiz-group" name="group_id" required>
+      <option value="">Choose a study group</option>
+    </select>
 
-            <label for="group-description">Description</label>
-            <textarea
-              id="group-description"
-              name="description"
-              maxlength="1000"
-              rows="3"
-              placeholder="What will this group focus on?"
-            ></textarea>
+    <label for="quiz-title">Quiz title</label>
+    <input
+      id="quiz-title"
+      name="title"
+      type="text"
+      maxlength="160"
+      required
+      placeholder="e.g. Introduction to Machine Learning"
+    >
 
-            <button type="submit" id="create-group-button" class="secondary-button">
-              Create group
-            </button>
-            <p id="create-group-status" role="status" aria-live="polite"></p>
-          </form>
-        </section>
+    <div id="quiz-questions"></div>
 
-        <!-- Instructor: create quizzes -->
-        <section id="quiz-creation-panel" class="create-group-panel" hidden>
-          <h2>Create a quiz</h2>
-          <p class="muted">Create questions and answer options for your study group.</p>
+    <button type="button" id="add-quiz-question" class="secondary-button">
+      Add question
+    </button>
 
-          <form id="create-quiz-form">
-            <label for="quiz-group">Study group</label>
-            <select id="quiz-group" name="group_id" required>
-              <option value="">Choose a study group</option>
-            </select>
+    <button type="submit" id="create-quiz-button" class="secondary-button">
+      Create quiz
+    </button>
 
-            <label for="quiz-title">Quiz title</label>
-            <input
-              id="quiz-title"
-              name="title"
-              type="text"
-              maxlength="160"
-              required
-              placeholder="e.g. Introduction to Machine Learning"
-            >
-
-            <div id="quiz-questions"></div>
-
-            <button type="button" id="add-quiz-question" class="secondary-button">
-              Add question
-            </button>
-            <button type="submit" id="create-quiz-button" class="secondary-button">
-              Create quiz
-            </button>
-            <p id="create-quiz-status" role="status" aria-live="polite"></p>
-          </form>
-        </section>
-
-        <!-- Student: available quizzes -->
-        <section id="quiz-attempts-panel" class="create-group-panel" hidden>
-          <h2>Available quizzes</h2>
-          <p class="muted">Choose a study group and attempt one of its quizzes.</p>
-
-          <label for="available-quiz-group">Study group</label>
-          <select id="available-quiz-group">
-            <option value="">Choose a study group</option>
-          </select>
-
-          <div id="available-quizzes" class="results-list" aria-live="polite">
-            <p class="muted">Choose a group to see its available quizzes.</p>
-          </div>
-
-          <div id="quiz-attempt-container" hidden>
-            <div class="section-heading">
-              <h2 id="attempt-quiz-title"></h2>
-            </div>
-            <form id="quiz-attempt-form">
-              <div id="attempt-questions"></div>
-              <button type="submit" id="submit-quiz-button" class="secondary-button">
-                Submit quiz
-              </button>
-              <p id="quiz-attempt-status" role="status" aria-live="polite"></p>
-            </form>
-          </div>
-        </section>
+    <p id="create-quiz-status" role="status" aria-live="polite"></p>
+  </form>
+</section>
 
         <!-- Student and instructor: results -->
         <section id="results-panel" class="create-group-panel" hidden>
@@ -195,30 +138,14 @@
           <div id="results-list" class="results-list"></div>
         </section>
 
-        <div class="section-heading tools-heading">
-          <div>
-            <p class="eyebrow">YOUR NEXT STEP</p>
-            <h2 id="tools-heading"></h2>
-          </div>
-          <span class="count-label">Actions for your role</span>
-        </div>
 
-        <section id="tools" class="tools-grid" aria-label="Available tools"></section>
-
-        <div class="refresh-row">
-          <span id="updated-at" class="muted"></span>
-          <button id="refresh-dashboard" class="text-button" type="button">
-            Refresh overview ↻
-          </button>
-        </div>
-      </div>
-
-      <footer>
-        A shared space for better learning.
-        <span>StudySpace / Sprint 1</span>
-      </footer>
-    </main>
-  </div>
+<div class="section-heading tools-heading"><div><p class="eyebrow">YOUR NEXT STEP</p><h2 id="tools-heading"></h2></div><span class="count-label">Actions for your role</span></div>
+<section id="tools" class="tools-grid" aria-label="Available tools"></section>
+<div class="refresh-row"><span id="updated-at" class="muted"></span><button id="refresh-dashboard" class="text-button" type="button">Refresh overview ↻</button></div>
+</div>
+<footer>A shared space for better learning.<span>StudySpace / Sprint 1</span></footer>
+</main>
+</div>
 </div>
 </body>
 </html>

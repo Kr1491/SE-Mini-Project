@@ -5,6 +5,7 @@ import stat
 from contextlib import contextmanager
 from pathlib import Path
 from .admin_users import AUDIT_SCHEMA
+from .quiz_scoring import SCHEMA as SCORING_SCHEMA
 
 MATERIALS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS materials (
@@ -153,6 +154,7 @@ CREATE TABLE IF NOT EXISTS quizzes (
     group_id INTEGER NOT NULL REFERENCES study_groups(id),
     created_by INTEGER NOT NULL REFERENCES users(id),
     title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 160),
+    status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'published')),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -170,36 +172,32 @@ CREATE TABLE IF NOT EXISTS quiz_options (
     option_text TEXT NOT NULL CHECK(length(trim(option_text)) > 0),
     is_correct INTEGER NOT NULL DEFAULT 0 CHECK(is_correct IN (0, 1))
 );
-CREATE TABLE IF NOT EXISTS quiz_attempts (
-    id INTEGER PRIMARY KEY,
-    quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
-    student_id INTEGER NOT NULL REFERENCES users(id),
-    score INTEGER NOT NULL CHECK(score >= 0),
-    total_questions INTEGER NOT NULL CHECK(total_questions > 0),
-    submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK(score <= total_questions)
-);
-
-CREATE TABLE IF NOT EXISTS quiz_attempt_answers (
-    id INTEGER PRIMARY KEY,
-    attempt_id INTEGER NOT NULL REFERENCES quiz_attempts(id) ON DELETE CASCADE,
-    question_id INTEGER NOT NULL REFERENCES quiz_questions(id),
-    option_id INTEGER NOT NULL REFERENCES quiz_options(id),
-    UNIQUE(attempt_id, question_id)
-);
-
-CREATE INDEX IF NOT EXISTS quiz_attempts_quiz
-    ON quiz_attempts(quiz_id);
-
-CREATE INDEX IF NOT EXISTS quiz_attempts_student
-    ON quiz_attempts(student_id);
-
-CREATE INDEX IF NOT EXISTS quiz_attempt_answers_attempt
-    ON quiz_attempt_answers(attempt_id);
 
 CREATE INDEX IF NOT EXISTS quizzes_group ON quizzes(group_id);
 CREATE INDEX IF NOT EXISTS quiz_questions_quiz ON quiz_questions(quiz_id);
 CREATE INDEX IF NOT EXISTS quiz_options_question ON quiz_options(question_id);
+
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id INTEGER PRIMARY KEY,
+    quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+    student_id INTEGER NOT NULL REFERENCES users(id),
+    started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    submitted_at TEXT,
+    grading_snapshot TEXT
+);
+
+CREATE TABLE IF NOT EXISTS quiz_attempt_answers (
+    attempt_id INTEGER NOT NULL REFERENCES quiz_attempts(id) ON DELETE CASCADE,
+    question_id INTEGER NOT NULL REFERENCES quiz_questions(id) ON DELETE CASCADE,
+    option_id INTEGER NOT NULL REFERENCES quiz_options(id),
+    PRIMARY KEY (attempt_id, question_id)
+);
+
+CREATE INDEX IF NOT EXISTS quiz_attempts_student
+ON quiz_attempts(student_id);
+
+CREATE INDEX IF NOT EXISTS quiz_attempts_quiz
+ON quiz_attempts(quiz_id);
 """
 
 
@@ -222,7 +220,18 @@ def _migrate_upload_idempotency(db):
 def initialize(path):
     _secure_database(path)
     with connect(path) as db:
-        db.executescript(SCHEMA + AUDIT_SCHEMA + QUIZ_SCHEMA)
+        db.executescript(SCHEMA + AUDIT_SCHEMA + QUIZ_SCHEMA + SCORING_SCHEMA)
+        attempt_columns = {row['name'] for row in db.execute('PRAGMA table_info(quiz_attempts)')}
+        if 'grading_snapshot' not in attempt_columns:
+            db.execute('ALTER TABLE quiz_attempts ADD COLUMN grading_snapshot TEXT')
+        quiz_columns = {
+            row['name'] for row in db.execute('PRAGMA table_info(quizzes)')
+        }
+        if 'status' not in quiz_columns:
+            db.execute(
+                "ALTER TABLE quizzes ADD COLUMN status TEXT NOT NULL "
+                "DEFAULT 'draft' CHECK(status IN ('draft', 'published'))"
+            )
         user_columns = {row['name'] for row in db.execute('PRAGMA table_info(users)')}
         if 'access_version' not in user_columns:
             db.execute('ALTER TABLE users ADD COLUMN access_version INTEGER NOT NULL DEFAULT 0 CHECK(access_version>=0)')

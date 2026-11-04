@@ -151,3 +151,19 @@ The duplicate upload material schema has been reconciled with the viewer schema.
 The additive `users.access_version` starts at zero and increments on actual role/status changes. Stale edits cannot overwrite a newer state. Successful changes delete all of the affected user's sessions and insert `user_access_audit` with the actor/target IDs, old/new role/access and UTC change timestamp. These writes commit together before success is returned; an audit failure rolls the entire change back. Reactivation requires fresh sign-in and never restores old tokens. No-op requests neither revoke sessions nor create audit entries.
 
 Permissions continue to derive from the existing role mapping and group ownership/membership. This feature does not add arbitrary individual permission overrides, password/account deletion operations, or group ownership transfers. Existing account data is preserved by initialization. The audit table remains private database data; it is not exposed to student/instructor responses.
+
+
+## Issue #16 — submission scoring
+
+The merged #15 routes are preserved. New attempts freeze a private grading snapshot in `quiz_attempts.grading_snapshot`; the start response omits answer keys. `POST /api/quiz-attempts/{id}/submit` now grades MCQs on the server, saves selected answers and one `quiz_attempt_results` row atomically, and returns a private receipt. Concurrent/altered retries return the original result. `GET /api/quiz-attempts/{id}/result` is restricted to the current Student's owned, in-scope attempt. Correct = 1, wrong/unanswered = 0, with all frozen questions in the total.
+
+Legacy attempts/answers are preserved. Old active attempts with no snapshot require a fresh start; old completed submissions return no recorded score rather than a fabricated zero. The schema, receipt shape, snapshot policy and #17 handoff are documented in [issue-16-integration.md](issue-16-integration.md). The #16 receipt screen is not a results-history/performance dashboard.
+
+
+## Results history and performance (#17)
+
+`GET /api/results/me` returns only the active Student's completed attempts in groups they can currently access. `GET /api/groups/{id}/results` requires current management authority for that group and includes Student display names. Both read saved `quiz_attempt_results` from #16, exclude active attempts, and omit grading snapshots, correct-answer flags and credentials. Legacy completed attempts with no saved grade return nullable score/total/percentage and display “Score unavailable”. They are never assigned a fabricated zero.
+
+`/results` renders Student history or a staff group selector from current manageable groups. Requests are sequenced; account reset and authorization errors clear private content. Existing create/publish/start/submit/receipt routes and the #16 schema are retained. Anushree's original #17 commit remains in the branch; merging current main resolves the older duplicate submission/schema implementation without replacing the existing attempt flow.
+
+Validation on 4 November 2026: 210 Python tests (3.12 and 3.14), 88 JavaScript tests, syntax checks, and an isolated real Chrome flow through Student history (1/2, 50%) and Instructor managed performance passed. Student access to staff results and Instructor access to another group's results returned 403. No production/user records were used.
