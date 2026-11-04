@@ -1,18 +1,18 @@
 # Issue #21 — local security verification and remediation
 
-Review resumed **3 November 2026** against merged main **cae0402**, including #13–#16 and #18. Branch: `test/21-security-verification`. User-confirmed admission policy: restricted groups require owner/Administrator approval. User-confirmed environment: **localhost only**.
+Review completed **4 November 2026** against merged main **53cc60a**, including #13–#18 and results/performance PR #39. Branch: `test/21-security-verification`. User-confirmed admission policy: restricted groups require owner/Administrator approval. User-confirmed environment: **localhost only**.
 
-**Status: local checks and the fixes below are complete; final issue sign-off is pending.** This is a targeted application review, not a security certification or a claim that unimplemented/deployed features passed.
+**Status: complete for the user-confirmed localhost scope.** This is a targeted application review, not a security certification or a claim that unimplemented/deployed features passed.
 
 ## Acceptance coverage
 
 | #21 acceptance criterion | Current evidence/status |
 |---|---|
-| Unauthenticated access to protected features | PASS for implemented APIs: session/dashboard, groups/folders, materials/view/download/HEAD, quiz create/publish/start/submit/receipt, Administrator page/API, membership requests/review and logout. Valid login/static shells remain public by design. |
+| Unauthenticated access to protected features | PASS for implemented APIs: session/dashboard, groups/folders, materials/view/download/HEAD, quiz create/publish/start/submit/receipt, own results and managed-group performance, Administrator page/API, membership requests/review and logout. Valid login/static shells remain public by design. |
 | Role restrictions and other groups' resources | PASS for implemented role/group checks, quiz attempt ownership, Administrator management, fresh write authorization, open joining and restricted admission/review. A pending request grants no membership or resource access. |
-| Passwords and quiz keys absent from Student responses | PASS for actual populated published-quiz/start/submit/receipt responses and session/dashboard/group/material data. Salted PBKDF2 storage and safe registration-helper output are tested; the helper check does not pretend a full registration UI/API was exercised. The current account's CSRF token and its own selected answers are intentionally available to its UI. |
-| Secure communication in deployed environment | **NOT VERIFIED: no deployed environment/HTTPS address exists or was supplied.** Localhost HTTP and the Secure-cookie configuration check are development evidence only, not deployed TLS proof. |
-| Record findings and resolve failures | Four finding categories below reproduced and fixed locally. Full results/performance checks remain pending integration of #17/PR #39. Keep #21 open. |
+| Passwords and quiz keys absent from Student responses | PASS for actual populated published-quiz/start/submit/receipt responses and session/dashboard/group/material/result-history/performance data. Salted PBKDF2 storage and safe registration-helper output are tested; the helper check does not pretend a full registration UI/API was exercised. The current account's CSRF token and its own selected answers are intentionally available to its UI. |
+| Secure communication in deployed environment | **NOT APPLICABLE to the user-confirmed localhost-only environment; deployed HTTPS is NOT VERIFIED.** No deployed HTTPS address exists or was supplied. Localhost HTTP and Secure-cookie configuration are development evidence, not TLS proof. |
+| Record findings and resolve failures | Four finding categories below reproduced and fixed. PR #39 was reconciled with #16, passed CI on Python 3.11/3.12 and merged; populated results/performance checks now pass. |
 
 ## Findings reproduced and fixed
 
@@ -46,19 +46,22 @@ Fix: those HTTP mutations recheck the session and CSRF inside the write transact
 
 ## Executed checks
 
-- **231 Python tests passed** on Python 3.14 and Python 3.12: 199 merged tests plus 17 security-verification and 15 membership-approval tests.
-- **88 JavaScript tests passed**: 81 merged tests plus 7 membership-controller tests.
-- Python compilation, membership/dashboard/attempt JavaScript syntax and diff checks passed. CI retains pinned Actions and Python 3.11/3.12; this local change has not been pushed, so no new remote CI result is claimed.
+- **242 Python tests passed** on Python 3.14 and Python 3.12: 210 merged tests plus 17 security-verification and 15 membership-approval tests.
+- **95 JavaScript tests passed**: 88 merged tests plus 7 membership-controller tests.
+- Python compilation, membership/dashboard/attempt JavaScript syntax and diff checks passed. CI retains pinned Actions and Python 3.11/3.12; the initial #21 commit passed remote CI on both versions. Final integration CI runs on the updated PR head before merge.
 - A real isolated Chrome flow passed Student login → private material denied → pending restricted join still denied → owner login and approval → Student login and authorized read. Reviewer identity, one membership and immutable decision state were checked in SQLite.
 - A second real Chrome flow passed Instructor create/publish → Student start → unanswered warning → confirmed submission → saved score → an altered repeated submission returning the original result. Grading data remains private while the new admission code is loaded.
 - Other regressions cover direct nonmember reads, forged identity/score values, second-Student receipts, anonymous requests, invalid CSRF, inactive accounts, account/password response secrecy, backup links/permissions, stale/unauthorized review, concurrent opposing decisions, replayed old approvals, and additive legacy-group migration.
 
+- A third real Chrome flow passed Student login → own results (1/2, 50%) → logout → Instructor login → managed-group performance. Student staff-results access and Instructor foreign-group results both returned 403. Actual result responses omit grading snapshots, answer keys and credential/session hashes; responses use no-store.
+- Results regressions additionally cover forged Student IDs, another Student's empty own history, membership revocation, changed role/inactive account, unsubmitted attempts, repeated submission without duplicated history and legacy submissions with unknown grades. The results UI clears private content on logout/denial and ignores stale account/group completions.
+
 All active mutation/security tests used temporary databases, accounts and storage. No existing user's role, membership, password or files were changed for testing.
 
-## Remaining sign-off items
+## Scope decision and future changes
 
-1. **#17 / PR #39 is still unmerged and has conflicts.** The new Student result-history and Instructor-performance endpoints cannot be marked passed on current main. After integration, test real populated responses for own/other Student records, managed/foreign quiz groups, password/key omission, revoked roles and sessions. A missing route/404 is not a successful security test of an unimplemented feature.
-2. **Deployed HTTPS**: when a deployment exists, check HTTPS reachability and certificate validity, HTTP redirect/rejection behavior, authenticated request transport and cookie flags through the actual proxy. `--secure-cookies` alone is not encryption. If the project is assessed exclusively as localhost development, obtain an explicit scope decision that the deployment criterion is Not Applicable; do not silently mark it passed.
-3. Re-run the suite and relevant browser/API checks after #19/#20 or other late changes affect protected flows. #22 load/performance verification and external penetration/malware testing are separate from this targeted review.
+The user identified this project as localhost-only and requested completion in that environment. All applicable local checks above are complete. The deployed-communication criterion is recorded as **Not Applicable to this environment**, not passed. No HTTPS deployment or security certification is claimed. When deployment is introduced, verify HTTPS reachability, certificate validity, HTTP redirect/rejection, authenticated request transport and cookie flags through the actual proxy; `--secure-cookies` alone does not provide encryption.
 
-A partial hardening PR should reference **Related to #21**, without an automatic closing keyword. Keep #21 **In progress** until the applicable remaining checks are recorded and accepted.
+Re-run the security suite and relevant browser/API checks when #19/#20 or later changes affect protected flows. #22 load/performance verification and external penetration/malware testing remain separate from this targeted review.
+
+PR #40 can close #21 for this documented local scope after the final integration checks pass. Move the board item to Done only after that PR is merged.

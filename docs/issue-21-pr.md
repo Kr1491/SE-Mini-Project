@@ -4,8 +4,10 @@ Restricted groups now require owner/Administrator approval rather than granting 
 
 Backup/recovery now rejects symlinks rather than dereferencing outside files, restricts backup/restored data to private POSIX permissions, and refuses shared restore parents before altering existing data. Group/folder/upload writes recheck current session/role/scope under their write transaction.
 
-Validation: 231 Python tests pass on 3.12 and 3.14; 88 JavaScript tests pass. Compilation, syntax and diff checks pass. Real isolated Chrome flows verify restricted request/approval/resource access and quiz creation/publication/submission/scoring with repeat-safe receipts.
+Validation: 242 Python tests pass on 3.12 and 3.14; 95 JavaScript tests pass. Compilation, syntax and diff checks pass. Real isolated Chrome flows verify restricted request/approval/resource access quiz creation/publication/submission/scoring with repeat-safe receipts, and Student history/Instructor managed-group performance.
 
-**Partial #21 sign-off:** the project is localhost-only, so deployed HTTPS is unverified. Final #17 result-history/performance checks await integration of PR #39. The report in docs/issue-21-security-review.md distinguishes executed checks, resolved findings and these remaining checks. This PR must not automatically close the overall issue.
+The merged #17 results/performance routes are now included in the security matrices and populated-response checks. Tests cover Student identity isolation, staff group restrictions, role/status/membership revocation, answer-key/credential omission and stale UI clearing.
 
-Related to #21
+**Scope:** the user confirmed localhost-only development. All applicable local checks are complete. Deployed HTTPS is **Not Applicable to the current environment and remains unverified**, rather than being marked passed. An actual deployment must separately verify TLS and cookie behavior. Findings, evidence and this scope decision are recorded in `docs/issue-21-security-review.md`.
+
+Closes #21

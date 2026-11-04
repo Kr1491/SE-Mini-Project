@@ -1,4 +1,4 @@
-"""Issue #21: available-feature security regression checks (partial audit)."""
+"""Issue #21: local security verification including results and performance."""
 import json
 import os
 import sqlite3
@@ -38,6 +38,7 @@ class EndpointSecurityTests(unittest.TestCase):
             ('GET','/api/groups/1/folders',None),('GET','/api/materials',None),('GET','/api/materials/1/view',None),
             ('GET','/api/materials/1/download',None),('GET','/api/groups/1/materials',None),('GET','/api/groups/1/quizzes',None),
             ('GET','/api/admin/users',None),('GET','/admin/users',None),('GET','/api/membership-requests',None),
+            ('GET','/api/results/me',None),('GET','/api/groups/1/results',None),
             ('GET','/api/quiz-attempts/1/result',None),('POST','/api/quizzes/1/publish',{}),
             ('POST','/api/quizzes/1/attempts',{}),('POST','/api/quiz-attempts/1/submit',{'answers':[]}),
             ('POST','/api/membership-requests/1/review',{'decision':'approve'}),('POST','/api/groups',{'name':'blocked'}),
@@ -51,8 +52,8 @@ class EndpointSecurityTests(unittest.TestCase):
         self.sign_in(2)
         for method,path,data in [('GET','/api/access/instructor',None),('GET','/api/access/admin',None),
             ('GET','/api/access/quiz-create',None),('GET','/api/dashboard/administrator',None),
-            ('GET','/api/admin/users',None),('GET','/admin/users',None),
-('POST','/api/quizzes/1/publish',{}),
+            ('GET','/api/admin/users',None),('GET','/admin/users',None),('GET','/api/groups/1/results',None),
+            ('POST','/api/quizzes/1/publish',{}),
 
             ('POST','/api/membership-requests/1/review',{'decision':'approve'}),('POST','/api/groups',{'name':'blocked'}),
             ('POST','/api/groups/1/folders',{'name':'blocked'}),('POST','/api/groups/1/quizzes',{}),
@@ -61,7 +62,7 @@ class EndpointSecurityTests(unittest.TestCase):
 
     def test_instructor_is_scoped_to_permitted_groups(self):
         self.sign_in(1)
-        for path in ['/api/admin/users','/api/groups/3/folders','/api/groups/3/quizzes','/api/groups/3/materials',
+        for path in ['/api/admin/users','/api/groups/3/folders','/api/groups/3/quizzes','/api/groups/3/materials','/api/groups/3/results',
                      f'/api/materials/{self.private_id}/view',f'/api/materials/{self.private_id}/download']:
             self.assertEqual(self.request('GET',path)[0],403,path)
         self.assertEqual(self.request('GET','/api/groups/1/folders')[0],200)
@@ -123,11 +124,22 @@ class EndpointSecurityTests(unittest.TestCase):
         status,data,_=self.request('POST',f'/api/quiz-attempts/{attempt}/submit',{'answers':[{'question_id':question['id'],'option_id':question['options'][0]['id']}],'score':999,'student_id':4})
         self.assertEqual(status,200);self.assertEqual(data['result']['score'],1);self.assertEqual(data['student_id'],2)
         receipt=self.request('GET',f'/api/quiz-attempts/{attempt}/result')[1]
+        status,history,headers=self.request('GET','/api/results/me')
+        self.assertEqual(status,200);self.assertEqual(history['results'][0]['score'],1)
+        self.assertIn('no-store',headers['Cache-Control'])
         for secret in ['grading_snapshot','correct_option_id','is_correct','password_hash','token_hash']:
             self.assertNotIn(secret,json.dumps(receipt))
             self.assertNotIn(secret,json.dumps(started))
+            self.assertNotIn(secret,json.dumps(history))
         self.sign_in(4)
         self.assertEqual(self.request('GET',f'/api/quiz-attempts/{attempt}/result')[0],404)
+        self.assertEqual(self.request('GET','/api/results/me?student_id=2')[1]['results'],[])
+        self.sign_in(1)
+        status,performance,headers=self.request('GET','/api/groups/1/results')
+        self.assertEqual(status,200);self.assertEqual(performance['results'][0]['student_id'],2)
+        self.assertIn('no-store',headers['Cache-Control'])
+        for secret in ['grading_snapshot','correct_option_id','is_correct','password_hash','token_hash']:
+            self.assertNotIn(secret,json.dumps(performance))
 
     def test_passwordless_accounts_cannot_authenticate_with_the_dummy_check_password(self):
         status,_,headers=self.request('POST','/api/login',{'email':'student@example.test','password':'not-a-real-account'})

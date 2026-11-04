@@ -289,3 +289,36 @@ def start_quiz_attempt(db, user, quiz_id):
 def submit_quiz_attempt(db, user, attempt_id, data):
     """Preserve the #15 entrypoint while adding #16 grading and retry receipts."""
     return submit_attempt(db, user, attempt_id, data)
+
+
+
+def student_results(db, user):
+    """List only this active Student's submitted, currently in-scope attempts."""
+    current = student_account(db, user)
+    rows = db.execute("""SELECT a.id,a.quiz_id,q.title AS quiz_title,
+        r.score,r.max_score AS total_questions,
+        CASE WHEN r.max_score>0 THEN ROUND(CAST(r.score AS REAL)/r.max_score*100,2) ELSE NULL END AS percentage,
+        a.submitted_at FROM quiz_attempts a
+        JOIN quizzes q ON q.id=a.quiz_id JOIN study_groups g ON g.id=q.group_id
+        LEFT JOIN quiz_attempt_results r ON r.attempt_id=a.id
+        WHERE a.student_id=? AND a.submitted_at IS NOT NULL AND
+        (g.created_by=? OR EXISTS(SELECT 1 FROM memberships m WHERE m.group_id=g.id AND m.user_id=?))
+        ORDER BY a.submitted_at DESC,a.id DESC""",(current['id'],current['id'],current['id']))
+    return {'results':[dict(row) for row in rows]}
+
+
+def group_results(db, user, group_id):
+    """List saved results only for a group the current staff account manages."""
+    current = db.execute('SELECT id,role,is_active FROM users WHERE id=?',(user['id'],)).fetchone()
+    if current is None or not current['is_active']:
+        raise APIError(401,'Your account is unavailable. Sign in again.')
+    require_permission(current,'instructor.summary')
+    group = group_access(db,current,group_id,manage=True)
+    rows = db.execute("""SELECT a.id,a.quiz_id,q.title AS quiz_title,a.student_id,u.name AS student_name,
+        r.score,r.max_score AS total_questions,
+        CASE WHEN r.max_score>0 THEN ROUND(CAST(r.score AS REAL)/r.max_score*100,2) ELSE NULL END AS percentage,
+        a.submitted_at FROM quiz_attempts a JOIN quizzes q ON q.id=a.quiz_id
+        JOIN users u ON u.id=a.student_id LEFT JOIN quiz_attempt_results r ON r.attempt_id=a.id
+        WHERE q.group_id=? AND a.submitted_at IS NOT NULL
+        ORDER BY q.title,u.name,a.submitted_at DESC,a.id DESC""",(group_id,))
+    return {'group':group,'results':[dict(row) for row in rows]}

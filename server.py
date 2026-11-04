@@ -31,6 +31,8 @@ from study_platform.quizzes import (
     publish_quiz,
     start_quiz_attempt,
     submit_quiz_attempt,
+    student_results,
+    group_results,
 )
 from study_platform.memberships import join_group, list_requests, review_request
 
@@ -159,6 +161,8 @@ class Handler(BaseHTTPRequestHandler):
             '/dashboard': ('dashboard.html', 'text/html; charset=utf-8'),
             '/dashboard/': ('dashboard.html', 'text/html; charset=utf-8'),
             '/quizzes': ('dashboard.html', 'text/html; charset=utf-8'),
+            '/results': ('dashboard.html', 'text/html; charset=utf-8'),
+            '/results.js': ('results.js', 'text/javascript; charset=utf-8'),
             '/access': ('index.html', 'text/html; charset=utf-8'),
             '/dashboard.js': ('dashboard.js', 'text/javascript; charset=utf-8'),
             '/dashboard.css': ('dashboard.css', 'text/css; charset=utf-8'),
@@ -344,6 +348,12 @@ class Handler(BaseHTTPRequestHandler):
                     result = create_quiz(db, user, group_id, self.body())
                     db.commit()
                     return self.json(201, {'quiz': result})
+
+            if method == 'GET' and path == '/api/results/me':
+                return self.json(200, student_results(db, user))
+            group_results_route = re.fullmatch(r'/api/groups/([1-9][0-9]*)/results', path)
+            if group_results_route and method == 'GET':
+                return self.json(200, group_results(db, user, parse_group_id(group_results_route[1])))
 
             publish_route = re.fullmatch(r'/api/quizzes/([1-9][0-9]*)/publish', path)
             if publish_route and method == 'POST':

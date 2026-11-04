@@ -510,6 +510,53 @@ class QuizTests(unittest.TestCase):
             self.assertIsNotNone(db.execute("SELECT 1 FROM sqlite_master WHERE name='upload_idempotency'").fetchone())
         self.assertEqual((storage/'notes.txt').read_text(),'Saved academic material')
 
+    def _submitted_result(self):
+        self.login_sample(1)
+        status,created=self.request('POST','/api/groups/1/quizzes',self.valid_quiz())
+        self.assertEqual(status,201)
+        quiz_id=created['quiz']['id']
+        self.assertEqual(self.request('POST',f'/api/quizzes/{quiz_id}/publish',{})[0],200)
+        self.login_sample(2)
+        status,started=self.request('POST',f'/api/quizzes/{quiz_id}/attempts',{})
+        self.assertEqual(status,201)
+        questions=started['quiz']['questions']
+        answers=[{'question_id':question['id'],'option_id':question['options'][index]['id']} for index,question in enumerate(questions)]
+        status,receipt=self.request('POST',f"/api/quiz-attempts/{started['attempt_id']}/submit",{'answers':answers})
+        self.assertEqual(status,200)
+        return receipt
 
-if __name__ == '__main__':
-    unittest.main()
+    def test_student_can_submit_quiz_and_view_own_result(self):
+        receipt=self._submitted_result()
+        self.assertEqual(receipt['result']['score'],2)
+        status,results=self.request('GET','/api/results/me')
+        self.assertEqual(status,200);self.assertEqual(len(results['results']),1)
+        self.assertEqual(results['results'][0]['quiz_title'],'Database Fundamentals')
+        self.assertEqual(results['results'][0]['score'],2)
+        self.assertEqual(results['results'][0]['percentage'],100)
+        self.login_sample(4)
+        self.assertEqual(self.request('GET','/api/results/me')[1]['results'],[])
+
+    def test_instructor_can_view_group_quiz_results(self):
+        self._submitted_result();self.login_sample(1)
+        status,results=self.request('GET','/api/groups/1/results')
+        self.assertEqual(status,200);self.assertEqual(len(results['results']),1)
+        self.assertEqual(results['results'][0]['score'],2)
+        self.assertEqual(results['results'][0]['student_name'],'Demo Student')
+
+    def test_student_cannot_view_group_results(self):
+        self.login_sample(2)
+
+        status, _ = self.request(
+            'GET', '/api/groups/1/results'
+        )
+
+        self.assertEqual(status, 403)
+
+    def test_instructor_cannot_view_unmanaged_group_results(self):
+        self.login_sample(1)
+
+        status, _ = self.request(
+            'GET', '/api/groups/3/results'
+        )
+
+        self.assertEqual(status, 403)

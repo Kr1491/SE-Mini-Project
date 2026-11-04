@@ -1,12 +1,12 @@
 # Issue #21 — review and publication
 
-Code branch: `test/21-security-verification`, based on main cae0402. The earlier security work is restored and reconciled with the real #14/#15/#16 schemas. The saved stashes remain as backups; do not blindly apply the older #16 sample draft or reapply the original #21 stash over this work.
+Code branch: `test/21-security-verification`, integrated with main `53cc60a` and merged #17 results/performance. The saved stashes remain as backups; do not reapply the older prototypes over this work.
 
 ## Status
 
-Local verification/fixes are ready: 231 Python tests on 3.12/3.14, 88 JavaScript tests, compilation/syntax/diff checks and two real Chrome flows pass. The complete findings and limitations are in [issue-21-security-review.md](issue-21-security-review.md).
+Local verification is complete: 242 Python tests on 3.12/3.14, 95 JavaScript tests, compilation/syntax/diff checks and three real Chrome flows pass. Findings, evidence and localhost scope are in [issue-21-security-review.md](issue-21-security-review.md). Deployed HTTPS is Not Applicable to this local environment and remains unverified.
 
-Keep #21 **In progress**. It is not fully Done: #17/PR #39 must be integrated and verified, and deployed HTTPS remains unverified because the project is localhost-only. A local hardening PR can be reviewed/merged without closing #21. The user authorized committing, pushing and opening a partial hardening PR. The commands below describe that publication workflow; the overall issue must remain open for the stated sign-off checks.
+Keep #21 **In review** while PR #40 is open; after successful checks and merge, the issue closes and can be moved to **Done**. GitHub Projects may require the final status update manually if no workflow is configured. No new issue or duplicate PR is needed.
 
 ## Run the local changes
 
@@ -49,18 +49,20 @@ python3 -m compileall -q server.py study_platform tests
 node --check static/memberships.js
 node --check static/dashboard.js
 node --check static/quiz-attempt.js
+node --check static/results.js
 git diff --check
 ```
 
-## Commit and create a partial hardening PR
+## Publish updates to the existing PR
+
+Stage only the files in this change; leave unrelated planning/security drafts and `signin_dummy.txt` out. Review the diff, commit and push `test/21-security-verification` to update PR #40. Do not create a second PR for the same issue.
 
 ```bash
-git add .github/workflows/ci.yml README.md server.py static/dashboard.css static/dashboard.html static/dashboard.js static/memberships.js study_platform/db.py study_platform/security.py study_platform/memberships.py study_platform/dashboard.py study_platform/demo.py study_platform/folders.py study_platform/recovery.py tests/test_access.py tests/test_security_verification.py tests/test_membership_approval.py tests/test_memberships_frontend.cjs docs/integration.md docs/BACKUP_RECOVERY.md docs/issue-21-pr.md docs/issue-21-security-review.md docs/issue-21-workflow.md
-git diff --cached --stat
-git diff --cached --check
-git commit -m "Verify local security and harden restricted group admission"
-git push -u origin test/21-security-verification
-gh pr create --repo Kr1491/SE-Mini-Project --base main --head test/21-security-verification --title "Verify local security and harden restricted group admission" --body-file docs/issue-21-pr.md --assignee Kr1491
+git diff --check
+python3 -m unittest discover -s tests -v
+node --test tests/*.cjs
+git push origin test/21-security-verification
+gh pr checks 40 --repo Kr1491/SE-Mini-Project
 ```
 
-Only the listed files belong in the commit; exclude unrelated planning/security drafts and signin_dummy.txt. The description references Related to #21 and deliberately does not close it. Remote CI/review follow the push. After #17 integration and a documented deployment/scope decision, execute the remaining acceptance checks before closing #21.
+Review `docs/issue-21-pr.md` and `docs/issue-21-security-review.md` with the code. The closing reference applies to the documented local scope; it does not claim HTTPS deployment was tested. After merge, restart any existing local server before checking the updated website.

@@ -229,3 +229,13 @@
 
 
 #create-group-form select,#request-group-id{font:inherit;background:white;border:1px solid #b9cec0;border-radius:8px;padding:10px 12px;color:#19332f;max-width:100%}.membership-join{display:flex;gap:10px;align-items:center;margin:9px 0 18px}#request-group-id{width:220px}.membership-card{display:flex;align-items:center;gap:9px;padding:15px 0;border-bottom:1px solid #dce5dd;font-size:12px}.membership-card>div{flex:1;min-width:0}.membership-card strong,.membership-card p{overflow-wrap:anywhere}.membership-card p{color:#4d6258;font-size:11px;margin:4px 0}.membership-card button{font:inherit;background:white;color:#176f61;border:1px solid #b8d1c0;border-radius:6px;padding:7px 10px;cursor:pointer}.membership-card button:disabled{opacity:.6;cursor:default}#request-join-form label{display:block;font-size:12px;margin-top:17px}@media(max-width:600px){.membership-card{flex-wrap:wrap}.membership-card>div{flex-basis:100%}.membership-join{flex-wrap:wrap}}
+/* Submitted quiz results */
+.result-card { background:var(--white); border:1px solid var(--line); border-radius:14px; padding:20px; }
+.result-card h3 {color:var(--ink); margin:0 0 10px;}
+.result-date {color:var(--muted); font-size:13px;}
+.result-card .score-summary,.result-percentage {color:var(--teal); font-size:20px; font-weight:700;}
+#results-status {margin-top:12px; color:var(--muted);}
+#results-status.error {color:#b03932;}
+#results-list {display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-top:20px;}
+#performance-group-control {margin:18px 0;}
+#performance-group {width:100%;max-width:400px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--white);}
