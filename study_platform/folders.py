@@ -1,7 +1,7 @@
 """Issue #7: authorized study-group folders, with no material operations."""
 import sqlite3
 import unicodedata
-from .security import APIError, group_access, require_permission
+from .security import APIError, group_access, require_permission, current_account
 
 
 def parse_group_id(value):
@@ -12,7 +12,7 @@ def parse_group_id(value):
 
 def available_groups(db, user):
     require_permission(user, 'groups.read')
-    rows = db.execute('''SELECT g.id,g.name,g.created_by FROM study_groups g
+    rows = db.execute('''SELECT g.id,g.name,g.created_by,g.join_policy FROM study_groups g
         WHERE ?='administrator' OR g.created_by=? OR EXISTS (
             SELECT 1 FROM memberships m WHERE m.group_id=g.id AND m.user_id=?)
         ORDER BY g.name,g.id''', (user['role'], user['id'], user['id']))
@@ -39,12 +39,8 @@ def create_folder(db, user, group_id, raw_name):
     # membership changes cannot race the authorized write.
     if not db.in_transaction:
         db.execute('BEGIN IMMEDIATE')
-    group_access(db, user, group_id, manage=True)
-    # Hold the write transaction across authorization and creation so group or
-    # membership changes cannot race the authorized write.
-    if not db.in_transaction:
-        db.execute('BEGIN IMMEDIATE')
-
+    user = current_account(db, user)
+    require_permission(user, 'folders.create')
     group_access(db, user, group_id, manage=True)
 
     try:

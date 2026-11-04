@@ -34,7 +34,8 @@ def seed(db):
         if db.execute(f'SELECT 1 FROM {table} LIMIT 1').fetchone():
             raise ValueError(FIXTURE_ERROR)
     db.executemany('INSERT INTO users(id,name,email,role,password_hash,is_active) VALUES(?,?,?,?,?,?)', USERS)
-    db.executemany('INSERT INTO study_groups(id,name,created_by) VALUES(?,?,?)', GROUPS)
+    db.executemany('INSERT INTO study_groups(id,name,created_by,join_policy) VALUES(?,?,?,?)',
+                   [(*group, 'approval' if group[0] == 3 else 'open') for group in GROUPS])
     db.executemany('INSERT INTO memberships(group_id,user_id) VALUES(?,?)', MEMBERSHIPS)
     db.execute('CREATE TABLE demo_fixture_state(id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL)')
     db.execute('INSERT INTO demo_fixture_state VALUES(1,1)')

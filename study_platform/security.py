@@ -19,6 +19,14 @@ class APIError(Exception):
         self.status, self.message = status, message
 
 
+def current_account(db, user):
+    """Recheck role/active state when a write uses an earlier identity lookup."""
+    account = db.execute('SELECT id,name,role,is_active FROM users WHERE id=?', (user['id'],)).fetchone()
+    if account is None or not account['is_active']:
+        raise APIError(401, 'Your account is unavailable. Sign in again.')
+    return account
+
+
 def create_session(db, user_id, *, demo=False):
     """Call ONLY after successful credential verification in Jiya's login module.
 

@@ -51,3 +51,8 @@ Invalid backups are rejected.
 - Back up the database and uploaded files together.
 - Stop the application before restoring.
 - Keep multiple backup copies.
+
+
+## Security requirements for backups and restores
+
+Use an owned private directory (0700 on POSIX) for backup output and restore parents. Existing shared parents are refused before data replacement. For the default output, create `.local-backups` and run `chmod 700 .local-backups` before backup. Database/manifest/copied files use 0600 and directories use 0700. Symbolic links and non-regular storage objects are rejected rather than dereferenced, including backup components supplied for restore. These changes do not silently change source-data permissions. Stop the app before a restore. See the [#21 verification report](issue-21-security-review.md).

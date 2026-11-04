@@ -160,6 +160,13 @@ The merged #15 routes are preserved. New attempts freeze a private grading snaps
 Legacy attempts/answers are preserved. Old active attempts with no snapshot require a fresh start; old completed submissions return no recorded score rather than a fabricated zero. The schema, receipt shape, snapshot policy and #17 handoff are documented in [issue-16-integration.md](issue-16-integration.md). The #16 receipt screen is not a results-history/performance dashboard.
 
 
+## Issue #21 — restricted admission and local security fixes
+
+The user confirmed that restricted groups require approval. `study_groups.join_policy` is open/approval; migration defaults old groups to approval and preserves current members. Group creation defaults to approval and accepts an explicit open policy. `POST /api/groups/{id}/join` returns 201 for a new open membership, 200 for an existing membership, or 202/pending for a restricted request without granting membership. Demo membership mutations are read-only.
+
+`GET /api/membership-requests` returns a Student's own history or pending requests for an Instructor's owned groups/all groups for Administrators. Nonmember Students do not receive private group names. `POST /api/membership-requests/{id}/review` accepts exactly `{"decision":"approve"}` or reject, requires CSRF and current owner/Administrator authority, and commits decision plus membership together. Pending requests are unique per group/Student; reviewed history remains immutable, and later reapplications create a new ID. Replaying an old approval never recreates removed membership.
+
+Protected group/folder/upload mutations recheck session/CSRF and current role/scope under their write transaction. Backup/recovery refuses symbolic links/shared restore parents and writes private directory/file permissions. See [the security report](issue-21-security-review.md). The final local #21 review includes merged #17 populated responses and current role/group revocation checks. The user confirmed localhost-only scope; deployed HTTPS is not applicable to that environment and is not claimed as tested. Actual deployment must verify TLS/cookie behavior separately.
 ## Results history and performance (#17)
 
 `GET /api/results/me` returns only the active Student's completed attempts in groups they can currently access. `GET /api/groups/{id}/results` requires current management authority for that group and includes Student display names. Both read saved `quiz_attempt_results` from #16, exclude active attempts, and omit grading snapshots, correct-answer flags and credentials. Legacy completed attempts with no saved grade return nullable score/total/percentage and display “Score unavailable”. They are never assigned a fabricated zero.
