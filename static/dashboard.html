@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>StudySpace · Your workspace</title>
-<link rel="stylesheet" href="/dashboard.css"><script src="/quiz-attempt.js" defer></script><script src="/dashboard.js" defer></script>
+<link rel="stylesheet" href="/dashboard.css"><script src="/quiz-attempt.js" defer></script><script src="/results.js" defer></script><script src="/dashboard.js" defer></script>
 </head>
 <body>
 <div id="demo-banner" class="demo-banner" hidden>LOCAL DEMO <span>Sample accounts and groups. Choose a sample account to explore.</span></div>
@@ -121,6 +121,23 @@
     <p id="create-quiz-status" role="status" aria-live="polite"></p>
   </form>
 </section>
+
+        <!-- Student and instructor: results -->
+        <section id="results-panel" class="create-group-panel" hidden>
+          <h2 id="results-heading">Your results</h2>
+          <p id="results-description" class="muted"></p>
+
+          <div id="performance-group-control" hidden>
+            <label for="performance-group">Study group</label>
+            <select id="performance-group">
+              <option value="">Choose a study group</option>
+            </select>
+          </div>
+
+          <p id="results-status" class="status-message" role="status" aria-live="polite"></p>
+          <div id="results-list" class="results-list"></div>
+        </section>
+
 
 <div class="section-heading tools-heading"><div><p class="eyebrow">YOUR NEXT STEP</p><h2 id="tools-heading"></h2></div><span class="count-label">Actions for your role</span></div>
 <section id="tools" class="tools-grid" aria-label="Available tools"></section>

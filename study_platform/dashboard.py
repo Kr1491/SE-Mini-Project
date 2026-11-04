@@ -85,6 +85,9 @@ def build_dashboard(db, user, *, features=None):
         'available': (key == 'quiz_creation' and role in ('instructor', 'administrator')) or (key == 'quiz_attempts' and role == 'student'),
         'href': '/quizzes' if (key == 'quiz_creation' and role in ('instructor', 'administrator')) or (key == 'quiz_attempts' and role == 'student') else None
     } for key in keys)
+    for action in actions:
+        if action['key'] in ('results', 'performance'):
+            action.update(available=True, href='/results')
     if role == 'administrator' and (features or {}).get('user_management'):
         action = next(item for item in actions if item['key'] == 'user_management')
         action.update(available=True, href='/admin/users')

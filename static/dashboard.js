@@ -33,6 +33,7 @@
     byId('dashboard-status').classList.toggle('error', error);
   }
   function clearWorkspace() {
+    globalThis.StudyResults?.reset?.();
     globalThis.StudyQuizAttempt?.reset?.(); startingQuiz = false;
     document.title = 'StudySpace · Your workspace';
     byId('dashboard-content').hidden = true;
@@ -56,7 +57,7 @@
     delete document.body.dataset.role;
   }
   function safeHref(value) {
-    return typeof value === 'string' && (/^#[a-z0-9-]+$/.test(value) || value === '/access' || value === '/access#folders-panel' || value === '/materials' || value === '/admin/users' || value === '/quizzes') ? value : null;
+    return typeof value === 'string' && (/^#[a-z0-9-]+$/.test(value) || value === '/access' || value === '/access#folders-panel' || value === '/materials' || value === '/admin/users' || value === '/quizzes' || value === '/results') ? value : null;
   }
   function render(data) {
     document.body.dataset.role = data.role;
@@ -82,7 +83,9 @@
       byId('dashboard-stats').append(card);
     }
     const createGroupPanel = byId('create-group-panel');
-    createGroupPanel.hidden = data.role !== 'instructor';
+    const isResultsPage = globalThis.location?.pathname === '/results';
+    createGroupPanel.hidden = data.role !== 'instructor' || isResultsPage;
+    byId('group-quizzes-panel').hidden = isResultsPage;
 
     const quizCreationPanel = byId('quiz-creation-panel');
     const isQuizPage = globalThis.location?.pathname === '/quizzes';
@@ -130,6 +133,9 @@
     byId('updated-at').textContent = Number.isNaN(updated.getTime()) ? '' : `Updated ${updated.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
     byId('signed-out').hidden = true;
     byId('dashboard-content').hidden = false;
+    if (isResultsPage) globalThis.StudyResults?.load?.(currentSession, {groups: data.groups, request, onDenied: error => {
+      ++revision; currentSession = null; clearWorkspace(); byId('signed-out').hidden = false; status(error.message, true);
+    }});
   }
   async function loadGroupQuizzes(groups, role, token) {
     const container = byId('group-quizzes');
@@ -294,7 +300,7 @@
       const data = await request(dashboardApi);
       if (token !== revision) return false;
       render(data);
-      loadGroupQuizzes(data.groups, data.role, token).catch(error => {
+      if (globalThis.location?.pathname !== '/results') loadGroupQuizzes(data.groups, data.role, token).catch(error => {
         if (token === revision) {
           console.error('Could not load group quizzes:', error);
         }

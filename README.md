@@ -24,7 +24,7 @@ Open `/login` for the email/password form. Registered accounts sign in to their 
 
 ## Role dashboards
 
-Students see their groups and active study partners; instructors see their owned/joined groups and teaching tools; administrators see global active-user/group/membership counts and administration tools. Summaries come from the current database. Direct `/dashboard/{student|instructor|administrator}` pages and corresponding APIs require the exact authenticated role. Account switching clears old private content and ignores stale responses. Dashboard links preserve the authorization checks of the destination feature; they retain the authorization checks of those features. Quiz creation, publication, attempts and immediate submission scores are available; results history and performance views remain #17. Administrators can open Users and permissions to manage registered accounts.
+Students see their groups and active study partners; instructors see their owned/joined groups and teaching tools; administrators see global active-user/group/membership counts and administration tools. Summaries come from the current database. Direct `/dashboard/{student|instructor|administrator}` pages and corresponding APIs require the exact authenticated role. Account switching clears old private content and ignores stale responses. Dashboard links preserve the authorization checks of the destination feature; they retain the authorization checks of those features. Quiz creation, publication, attempts and immediate submission scores are available; results history and managed-group performance views are available at `/results`. Administrators can open Users and permissions to manage registered accounts.
 
 ## Administrator accounts and permissions (#18)
 
@@ -36,7 +36,7 @@ Explicit `--demo` accounts are read-only so their fixed identities remain valid.
 
 An Instructor can create and publish MCQs in an owned group. An eligible Student opens Available quizzes, starts an attempt, selects answers, and reviews the confirmation before submitting. Each correct answer earns one point; wrong/unanswered questions earn zero while remaining in the total. The server saves the answers and one result per attempt before confirming the score. Retries return the original saved result, and grading keys remain private.
 
-The database migration preserves existing records. In-progress attempts started before grading snapshots existed require a new start; older completed submissions remain ungraded rather than receiving invented scores. Results history/instructor performance is separate #17. [Run/PR commands](docs/issue-16-workflow.md), [scoring contract for #17](docs/issue-16-integration.md), and [test evidence](docs/issue-16-test-results.md).
+The database migration preserves existing records. In-progress attempts started before grading snapshots existed require a new start; older completed submissions remain ungraded rather than receiving invented scores. Results history and instructor performance now read the same saved grades at `/results`. [Run/PR commands](docs/issue-16-workflow.md), [scoring contract for #17](docs/issue-16-integration.md), and [test evidence](docs/issue-16-test-results.md).
 
 ## Group folders
 
@@ -69,7 +69,7 @@ node --test tests/*.cjs
 
 Node.js is required only for frontend tests and syntax checks. The Python suite dispatches actual HTTP handlers over in-memory connections with temporary SQLite databases; it needs no listening port. Frontend tests execute the actual JavaScript with a simulated DOM and fetch responses.
 
-Local results: **199 Python tests** pass on Python 3.12 and 3.14; **81 JavaScript tests** pass. CI retains pinned actions and Python 3.11/3.12 coverage. Live HTTP integration checks pass on a loopback server. Isolated Chrome sign-in/sign-out and administrator-management flows pass; updated remote CI follows the push.
+Local results: **210 Python tests** pass on Python 3.12 and 3.14; **88 JavaScript tests** pass. CI retains pinned actions and Python 3.11/3.12 coverage. Live HTTP integration checks pass on a loopback server. Isolated Chrome sign-in/sign-out and administrator-management flows pass; updated remote CI follows the push.
 
 ## Issue documents
 
