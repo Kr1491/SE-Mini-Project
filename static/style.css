@@ -11,3 +11,5 @@
     min-height: 44px;
   }
 }
+/* Usability: standalone links meet the WCAG 2.2 24px minimum target size. */
+main > p > a{display:inline-flex;align-items:center;min-height:24px}

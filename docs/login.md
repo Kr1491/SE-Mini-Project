@@ -40,7 +40,7 @@ print('Created:', account['email'])
 PY
 ```
 
-The registration form, password reset and account-management UI remain separate integration work. This change adds no default real-account password.
+Students can also self-register at `/register` (`POST /api/register`), which uses the same `register_user` validation, creates a Student account only, and signs the new account in. Cross-origin requests are rejected and registration is disabled in demo mode. Password reset remains separate integration work. No default real-account password is added.
 
 ## API behavior
 

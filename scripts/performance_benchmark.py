@@ -72,8 +72,18 @@ def percentile(values, percent):
 
 
 def measure(action, requests, users):
-    """Measure an action with independent authenticated clients."""
+    """Measure an action with independent authenticated clients.
+
+    Returns (timings_ms, errors): a failed request is counted, not fatal,
+    so the error rate under load can be reported.
+    """
     def one_request(_):
+        try:
+            return timed_request()
+        except Exception as error:  # noqa: BLE001 - every failure counts
+            return error
+
+    def timed_request():
         client = Client(BASE_URL)
 
         if action == "login":
@@ -115,7 +125,10 @@ def measure(action, requests, users):
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=users
     ) as executor:
-        return list(executor.map(one_request, range(requests)))
+        outcomes = list(executor.map(one_request, range(requests)))
+    timings = [value for value in outcomes if isinstance(value, float)]
+    errors = [value for value in outcomes if not isinstance(value, float)]
+    return timings, errors
 
 
 def prepare():
@@ -170,6 +183,7 @@ def main():
     parser.add_argument("--requests", type=int, default=10)
     parser.add_argument("--users", type=int, default=5)
     parser.add_argument("--quiz-questions", type=int, default=2)
+    parser.add_argument("--output", default="performance-results.json")
     args = parser.parse_args()
 
     if args.requests < 1 or args.users < 1 or args.quiz_questions < 1:
@@ -200,18 +214,24 @@ def main():
 
     print("\nStudySpace Performance Results")
     print("=" * 72)
-    print(f"{'Operation':<22} {'Average':>10} {'Median':>10} {'P95':>10} {'Max':>10}")
+    print(f"{'Operation':<22} {'Average':>10} {'Median':>10} {'P95':>10} {'Max':>10} {'Errors':>7}")
     print("-" * 72)
 
     for action in actions:
-        timings = measure(action, args.requests, args.users)
+        timings, errors = measure(action, args.requests, args.users)
+        if not timings:
+            raise RuntimeError(f"Every {action} request failed: {errors[0]}")
         summary = {
             "average_ms": round(statistics.mean(timings), 2),
             "median_ms": round(statistics.median(timings), 2),
             "p95_ms": round(percentile(timings, 95), 2),
             "max_ms": round(max(timings), 2),
             "samples": len(timings),
+            "errors": len(errors),
+            "error_rate_percent": round(100 * len(errors) / args.requests, 2),
         }
+        if errors:
+            summary["first_error"] = str(errors[0])
         results["measurements"][action] = summary
 
         print(
@@ -219,10 +239,11 @@ def main():
             f"{summary['average_ms']:>9.2f} "
             f"{summary['median_ms']:>9.2f} "
             f"{summary['p95_ms']:>9.2f} "
-            f"{summary['max_ms']:>9.2f}"
+            f"{summary['max_ms']:>9.2f} "
+            f"{summary['errors']:>7}"
         )
 
-    output = Path("performance-results.json")
+    output = Path(args.output)
     output.write_text(json.dumps(results, indent=2), encoding="utf-8")
 
     print("=" * 72)

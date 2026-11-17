@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StudySpace · Create account</title>
+<link rel="stylesheet" href="/login.css"><script src="/register.js" defer></script>
+</head>
+<body>
+<header><a class="brand" href="/dashboard"><span class="brand-mark">S</span>StudySpace<span class="brand-dot">.</span></a><a class="header-link" href="/login">Already registered? Sign in ↗</a></header>
+<main class="login-layout">
+<section class="welcome" aria-labelledby="welcome-heading"><p class="eyebrow">JOIN YOUR CLASS</p><h1 id="welcome-heading">Start learning<br>together<span>.</span></h1><p class="welcome-copy">Create your student account, then join the study groups your instructor shares with you.</p></section>
+<section class="login-panel" aria-labelledby="register-heading"><p class="eyebrow">NEW STUDENT</p><h2 id="register-heading">Create your account<span>.</span></h2><p class="form-intro">Fill in three fields. You will be signed in straight away.</p>
+<form id="register-form"><fieldset id="register-fields" disabled><legend class="visually-hidden">Student account details</legend><label for="name">Full name</label><input id="name" name="name" type="text" autocomplete="name" placeholder="Your name" maxlength="80" required><div class="password-label"><label for="email">Email address</label></div><input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" maxlength="254" required><div class="password-label"><label for="password">Password</label></div><div class="password-field"><input id="password" name="password" type="password" autocomplete="new-password" placeholder="At least 12 characters" minlength="12" maxlength="128" required aria-describedby="password-hint"><button id="toggle-password" type="button" aria-controls="password" aria-pressed="false">Show</button></div><p id="password-hint" class="message">Use 12–128 characters. A short phrase is easy to remember.</p><button id="create-account" class="primary-button" type="submit">Create account <span aria-hidden="true">↗</span></button></fieldset></form>
+<p id="register-status" class="message" role="status" aria-live="polite">Connecting to your workspace…</p>
+<p class="account-help">Instructor accounts are added by an administrator. <a href="/login">Back to sign in</a></p>
+</section>
+</main>
+<footer><span>A shared space for better learning.</span><span>StudySpace</span></footer>
+</body>
+</html>

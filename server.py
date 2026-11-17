@@ -18,7 +18,7 @@ from study_platform.materials import catalog, query_options, integer, initialize
 from study_platform.material_fixtures import seed_materials
 from study_platform.db import connect, initialize
 from study_platform.demo import seed, validate_demo
-from study_platform.auth import AuthError, login_user
+from study_platform.auth import AuthError, login_user, register_user
 from study_platform.folders import available_groups, list_folders, create_folder, parse_group_id
 from study_platform.security import APIError, COOKIE_NAME, PERMISSIONS, create_session, current_session, group_access, require_permission
 
@@ -171,6 +171,9 @@ class Handler(BaseHTTPRequestHandler):
             '/login/': ('login.html', 'text/html; charset=utf-8'),
             '/login.js': ('login.js', 'text/javascript; charset=utf-8'),
             '/login.css': ('login.css', 'text/css; charset=utf-8'),
+            '/register': ('register.html', 'text/html; charset=utf-8'),
+            '/register/': ('register.html', 'text/html; charset=utf-8'),
+            '/register.js': ('register.js', 'text/javascript; charset=utf-8'),
             '/memberships.js': ('memberships.js', 'text/javascript; charset=utf-8'),
             '/admin-users.js': ('admin-users.js', 'text/javascript; charset=utf-8'),
             '/admin-users.css': ('admin-users.css', 'text/css; charset=utf-8'),
@@ -204,6 +207,20 @@ class Handler(BaseHTTPRequestHandler):
                 token, csrf = create_session(db, user['id'])
                 db.commit()
                 return self.json(200, {'user': user, 'csrf_token': csrf},
+                                 {'Set-Cookie': self.session_cookie(token)})
+            if path == '/api/register' and method == 'POST':
+                # Public self-registration creates Student accounts only;
+                # instructors and administrators are provisioned by an administrator.
+                self.check_login_origin()
+                data = self.body()
+                if self.server.demo:
+                    raise APIError(409, 'Registration is turned off in the local demo. Choose a sample account on the sign-in page.')
+                user = register_user(db, data)
+                self.revoke_cookie_session(db)
+                token, csrf = create_session(db, user['id'])
+                # Persist the account and session before the browser receives the cookie.
+                db.commit()
+                return self.json(201, {'user': user, 'csrf_token': csrf},
                                  {'Set-Cookie': self.session_cookie(token)})
             if path=='/api/demo/session' and method=='POST':
                 if not self.server.demo:
@@ -680,6 +697,12 @@ class Handler(BaseHTTPRequestHandler):
             raise APIError(404,'Route not found.')
 
 
+class StudySpaceServer(ThreadingHTTPServer):
+    # The standard library listens with a backlog of 5, so a burst of students
+    # connecting at once (e.g. a class starting a quiz) had connections reset.
+    request_queue_size = 128
+
+
 def make_server(database,port=8000,demo=False,host='127.0.0.1',storage=None,secure_cookies=False):
     if ':' in host:
         raise ValueError('IPv6 hosts are not supported by this server. Use 127.0.0.1.')
@@ -692,7 +715,7 @@ def make_server(database,port=8000,demo=False,host='127.0.0.1',storage=None,secu
         with connect(database) as db:
             seed(db)
             seed_materials(db, storage)
-    server=ThreadingHTTPServer((host,port),Handler)
+    server=StudySpaceServer((host,port),Handler)
     server.database,server.demo,server.storage=str(database),demo,str(storage)
     server.secure_cookies = secure_cookies
     return server

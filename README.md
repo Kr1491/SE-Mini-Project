@@ -1,6 +1,6 @@
 # StudySpace — role dashboards, group folders and materials
 
-StudySpace opens a role-specific dashboard with database-backed summaries, scoped groups, and navigation for students, instructors, and administrators. #6 incorporates merged role access (#5), folders (#7), and material viewing/downloading (#12), linking the protected workspaces without replacing their authorization checks. The basic login page uses the merged registration password helpers. Administrator user/role/access management is now available; registration UI remains separate integration work. Quiz creation, publishing, attempts and submission scoring now work together.
+StudySpace opens a role-specific dashboard with database-backed summaries, scoped groups, and navigation for students, instructors, and administrators. #6 incorporates merged role access (#5), folders (#7), and material viewing/downloading (#12), linking the protected workspaces without replacing their authorization checks. The basic login page uses the merged registration password helpers. Administrator user/role/access management is now available, and students can create their own account at `/register`. Quiz creation, publishing, attempts and submission scoring now work together.
 
 ## Run locally
 
@@ -20,7 +20,7 @@ By default, demo mode uses `var/demo-access.db` and private `var/demo-materials/
 
 ## Sign in
 
-Open `/login` for the email/password form. Registered accounts sign in to their role dashboard and can Sign out from the profile. In local demo mode, use the clearly labelled sample account buttons; fixtures have no passwords. [Setup, API and verification details](docs/login.md).
+Open `/login` for the email/password form. New students choose **Create an account** (`/register`): name, email and a 12–128 character password create a Student account and sign in straight away. Instructor and Administrator accounts are never self-registered. Registration is turned off in `--demo` mode. Registered accounts sign in to their role dashboard and can Sign out from the profile. In local demo mode, use the clearly labelled sample account buttons; fixtures have no passwords. [Setup, API and verification details](docs/login.md).
 
 ## Role dashboards
 
@@ -69,12 +69,15 @@ node --check static/memberships.js
 node --check static/quiz-attempt.js
 node --check static/admin-users.js
 node --check static/login.js
+node --check static/register.js
 node --check static/app.js
 node --check static/dashboard.js
 node --check static/folders.js
 node --check static/materials.js
 node --test tests/*.cjs
 ```
+
+Quality evidence for the ISO 9126 evaluation ([docs/iso-9126-quality-model.md](docs/iso-9126-quality-model.md)) can be reproduced with `python3 scripts/performance_benchmark.py --users 100 --requests 300 --output <file>` against a running demo server, and `node scripts/browser_quality_check.cjs --out <dir>` (needs Google Chrome or Chromium) for click counts and phone/tablet layouts.
 
 Node.js is required only for frontend tests and syntax checks. The Python suite dispatches actual HTTP handlers over in-memory connections with temporary SQLite databases; it needs no listening port. Frontend tests execute the actual JavaScript with a simulated DOM and fetch responses.
 

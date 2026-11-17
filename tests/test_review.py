@@ -124,13 +124,13 @@ class ReviewTests(unittest.TestCase):
 
     def test_ipv6_is_explicitly_rejected_instead_of_reaching_ipv4_binding(self):
         for demo in [False, True]:
-            with patch('server.ThreadingHTTPServer') as http:
+            with patch('server.StudySpaceServer') as http:
                 with self.assertRaisesRegex(ValueError, 'IPv6'):
                     make_server(self.database, host='::1', demo=demo)
                 http.assert_not_called()
 
     def test_supported_ipv4_demo_host_reaches_server_construction(self):
-        with patch('server.ThreadingHTTPServer', return_value=SimpleNamespace()) as http:
+        with patch('server.StudySpaceServer', return_value=SimpleNamespace()) as http:
             server = make_server(self.database, host='127.0.0.1', demo=True)
         self.assertTrue(server.demo)
         http.assert_called_once()
